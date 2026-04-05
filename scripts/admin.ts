@@ -63,7 +63,7 @@ const IDL = {
     },
     {
       name: "createPropertyMetadata",
-      discriminator: [42, 222, 169, 133, 40, 225, 68, 140],
+      discriminator: [204, 97, 150, 206, 169, 15, 73, 250],
       accounts: [
         { name: "property", writable: true },
         { name: "tokenMint", writable: true },
