@@ -126,7 +126,9 @@ pub mod solestate {
                 },
                 signer_seeds,
             ),
-            token_amount,
+            // decimals = 6: mint token_amount * 10^6 base units
+            // so the wallet shows human-readable whole numbers (e.g., 2.000000)
+            token_amount.checked_mul(1_000_000).ok_or(SolEstateError::ArithmeticOverflow)?,
         )?;
 
         // Update state
@@ -333,6 +335,14 @@ pub mod solestate {
         Ok(())
     }
 
+    // ─── 8. Close property (admin-only) ──────────────────────────────────────
+    /// Closes a PropertyState PDA and returns rent to the admin.
+    /// Used to re-create properties with new mint parameters (e.g., decimals change).
+    pub fn close_property(_ctx: Context<CloseProperty>) -> Result<()> {
+        msg!("Property closed");
+        Ok(())
+    }
+
     // ─── 8. Create Metaplex Metadata for existing or new tokens ──────────────
     pub fn create_property_metadata(
         ctx: Context<CreatePropertyMetadata>,
@@ -477,7 +487,7 @@ pub struct ListProperty<'info> {
     #[account(
         init,
         payer = admin,
-        mint::decimals = 0,         // whole tokens only
+        mint::decimals = 6,         // fungible — shows in Tokens tab in Phantom
         mint::authority = property, // PDA controls minting
     )]
     pub token_mint: Box<Account<'info, Mint>>,
@@ -709,6 +719,26 @@ pub struct ListingFilled {
 // Errors
 // ─────────────────────────────────────────────
 
+
+#[derive(Accounts)]
+pub struct CloseProperty<'info> {
+    #[account(
+        mut,
+        close = admin, // rent is returned to admin
+        seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()],
+        bump = property.bump,
+        constraint = property.admin == admin.key() @ SolEstateError::Unauthorized,
+    )]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
 
 #[derive(Accounts)]
 pub struct CreatePropertyMetadata<'info> {
