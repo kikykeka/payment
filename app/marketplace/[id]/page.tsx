@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState, useCallback } from 'react'
+import { use, useState, useCallback, useMemo } from 'react'
 import { useWallet } from '@/lib/wallet-context'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -13,15 +13,20 @@ import {
   Calendar,
   TrendingUp,
   Users,
-  ExternalLink,
-  Check,
-  AlertCircle,
   ChevronRight,
   Loader2,
   X,
   CheckCircle2,
   XCircle,
+  Tag,
+  ShieldCheck,
+  Coins,
+  Check,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react'
+import { SellModal } from '@/components/SellModal'
+import { createSaleListing } from '@/lib/p2p-market'
 import {
   AreaChart,
   Area,
@@ -77,7 +82,15 @@ export default function PropertyDetailPage({ params }: PageProps) {
   // SOL price proxy: totalCost is in SOL, convert to lamports
   const lamports = Math.round(totalCost * 1e9)
 
-  const { connected, connect, shortAddress, sendPurchaseTx } = useWallet()
+  const { connected, connect, shortAddress, sendPurchaseTx, purchases } = useWallet()
+  const [isSellModalOpen, setIsSellModalOpen] = useState(false)
+  
+  const userHoldings = useMemo(() => {
+    return purchases
+      .filter(p => p.propertyId === property.id)
+      .reduce((sum, p) => sum + p.tokens, 0)
+  }, [purchases, property.id])
+
   const related = properties.filter((p) => p.id !== property.id).slice(0, 3)
 
   const handleInvest = useCallback(async () => {
@@ -370,20 +383,31 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   {/* Invest button */}
                   {property.status === 'active' ? (
                     connected ? (
-                      <button
-                        onClick={handleInvest}
-                        disabled={purchasing}
-                        className="w-full py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors glow-purple flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                      >
-                        {purchasing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Awaiting Signature...
-                          </>
-                        ) : (
-                          `Invest Now — ${formatSOL(totalCost)}`
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleInvest}
+                          disabled={purchasing}
+                          className="flex-1 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors glow-purple flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                          {purchasing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Awaiting Signature...
+                            </>
+                          ) : (
+                            `Invest Now — ${formatSOL(totalCost)}`
+                          )}
+                        </button>
+                        {userHoldings > 0 && (
+                          <button
+                            onClick={() => setIsSellModalOpen(true)}
+                            className="px-4 py-3.5 rounded-xl bg-secondary border border-white/5 text-white/50 hover:text-white hover:bg-secondary/80 transition-all flex items-center justify-center shrink-0"
+                            title="Sell your tokens"
+                          >
+                            <Tag className="w-5 h-5" />
+                          </button>
                         )}
-                      </button>
+                      </div>
                     ) : (
                       <button
                         onClick={connect}
@@ -405,11 +429,10 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   {/* ── Transaction result banner ───────────────────────── */}
                   {txStatus && (
                     <div
-                      className={`mt-4 rounded-xl p-4 flex items-start gap-3 border text-sm ${
-                        txStatus.state === 'success'
+                      className={`mt-4 rounded-xl p-4 flex items-start gap-3 border text-sm ${txStatus.state === 'success'
                           ? 'bg-accent/10 border-accent/30'
                           : 'bg-destructive/10 border-destructive/30'
-                      }`}
+                        }`}
                     >
                       {txStatus.state === 'success' ? (
                         <CheckCircle2 className="w-5 h-5 text-accent shrink-0 mt-0.5" />
@@ -500,6 +523,24 @@ export default function PropertyDetailPage({ params }: PageProps) {
       </main>
 
       <Footer />
+
+      <SellModal
+        isOpen={isSellModalOpen}
+        onClose={() => setIsSellModalOpen(null as any)}
+        property={{
+          id: property.id,
+          name: property.name,
+          image: property.image,
+          tokenMint: '' // Handled by library
+        }}
+        maxTokens={userHoldings}
+        onSell={async (amt, prc) => {
+          const wallet = (window as any).phantom?.solana
+          const priceLamports = Math.floor(prc * 1e9)
+          await createSaleListing(wallet, property.id, amt, priceLamports)
+          alert('Successfully listed for sale!')
+        }}
+      />
     </div>
   )
 }

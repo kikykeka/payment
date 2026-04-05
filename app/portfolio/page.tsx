@@ -16,7 +16,13 @@ import {
   PieChart,
   Activity,
   ChevronRight,
+  ListRestart,
+  Tag,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react'
+import { SellModal } from '@/components/SellModal'
+import { fetchAllUserListings, cancelSaleListing, createSaleListing, lockTokens } from '@/lib/p2p-market'
 import {
   AreaChart,
   Area,
@@ -58,6 +64,26 @@ export default function PortfolioPage() {
   useEffect(() => setMounted(true), [])
 
   const { connected, connect, connecting, publicKey, balance, shortAddress, purchases } = useWallet()
+  const [activeListings, setActiveListings] = useState<any[]>([])
+  const [isLoadingListings, setIsLoadingListings] = useState(false)
+  const [sellModalData, setSellModalData] = useState<{ isOpen: boolean, property: any, tokens: number } | null>(null)
+
+  const refreshListings = async () => {
+    if (!connected || !publicKey) return
+    setIsLoadingListings(true)
+    try {
+      const list = await fetchAllUserListings((window as any).phantom?.solana)
+      setActiveListings(list)
+    } catch (e) {
+      console.error('Failed to fetch listings:', e)
+    } finally {
+      setIsLoadingListings(false)
+    }
+  }
+
+  useEffect(() => {
+    if (connected) refreshListings()
+  }, [connected, publicKey])
 
   // ── Derived stats ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -346,10 +372,17 @@ export default function PortfolioPage() {
                         return (
                           <tr key={item.name} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                             <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                <span className="text-foreground font-medium truncate max-w-[180px]">{item.name}</span>
-                              </div>
+                              {propertyId ? (
+                                <Link href={`/marketplace/${propertyId}`} className="flex items-center gap-3 group">
+                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                  <span className="text-foreground font-medium truncate max-w-[180px] group-hover:text-primary transition-colors">{item.name}</span>
+                                </Link>
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                  <span className="text-foreground font-medium truncate max-w-[180px]">{item.name}</span>
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-4 text-right text-foreground">{formatNum(item.tokens)}</td>
                             <td className="px-4 py-4 text-right text-foreground">{item.sol.toFixed(4)} SOL</td>
@@ -357,40 +390,16 @@ export default function PortfolioPage() {
                             <td className="px-4 py-4 text-right text-accent">+{monthly.toFixed(4)} SOL</td>
                             <td className="px-6 py-4 text-right">
                               {propertyId && (
-                                <div className="flex items-center justify-end gap-3">
-                                  <Link
-                                    href={`/marketplace/${propertyId}`}
-                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                                  >
-                                    View
-                                  </Link>
+                                <div className="flex items-center justify-end gap-4">
                                   <button
-                                    onClick={async () => {
-                                      const priceStr = window.prompt(`How much SOL do you want for 1 token of ${item.name}? (e.g. 0.05)`)
-                                      if (!priceStr) return
-                                      const priceSol = parseFloat(priceStr)
-                                      if (isNaN(priceSol) || priceSol <= 0) return alert('Invalid price')
-                                      
-                                      const tokensStr = window.prompt(`How many tokens to sell? (Max: ${item.tokens})`)
-                                      if (!tokensStr) return
-                                      const tokens = parseInt(tokensStr, 10)
-                                      if (isNaN(tokens) || tokens <= 0 || tokens > item.tokens) return alert('Invalid token amount')
-
-                                      const tokenMint = PROPERTIES.find(p => p.id === propertyId)?.tokenMint
-                                      if (!tokenMint) return alert('Token mint not found')
-                                      
-                                      const wallet = (window as any).phantom?.solana
-                                      if (!wallet) return alert('Connect wallet first')
-
-                                      try {
-                                        const { createSaleListing } = await import('@/lib/p2p-market')
-                                        const priceLamports = priceSol * 1e9
-                                        const sig = await createSaleListing(wallet, propertyId, tokenMint, tokens, priceLamports)
-                                        console.log('Listing created:', sig)
-                                        alert('Successfully listed for sale!')
-                                      } catch (e: any) {
-                                        console.error(e)
-                                        alert('Error: ' + e.message)
+                                    onClick={() => {
+                                      const property = PROPERTIES.find(p => p.id === propertyId)
+                                      if (property) {
+                                        setSellModalData({
+                                          isOpen: true,
+                                          property,
+                                          tokens: item.tokens
+                                        })
                                       }
                                     }}
                                     className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-semibold"
@@ -409,15 +418,11 @@ export default function PortfolioPage() {
                                       const duration = parseInt(durationStr, 10)
                                       if (![30, 90, 180, 365].includes(duration)) return alert('Must be 30, 90, 180, or 365 days')
 
-                                      const tokenMint = PROPERTIES.find(p => p.id === propertyId)?.tokenMint
-                                      if (!tokenMint) return alert('Token mint not found')
-                                      
                                       const wallet = (window as any).phantom?.solana
                                       if (!wallet) return alert('Connect wallet first')
 
                                       try {
-                                        const { lockTokens } = await import('@/lib/p2p-market')
-                                        const sig = await lockTokens(wallet, propertyId, tokenMint, tokens, duration)
+                                        const sig = await lockTokens(wallet, propertyId, tokens, duration)
                                         console.log('Tokens locked:', sig)
                                         alert(`Successfully locked ${tokens} tokens for ${duration} days!`)
                                       } catch (e: any) {
@@ -425,7 +430,7 @@ export default function PortfolioPage() {
                                         alert('Error: ' + e.message)
                                       }
                                     }}
-                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
+                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors"
                                   >
                                     Lock
                                   </button>
@@ -437,6 +442,102 @@ export default function PortfolioPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              {/* ── Active Listings (Selling) ────────────────────────────── */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-5 h-5 text-accent" />
+                    <h2 className="text-xl font-bold text-white tracking-tight">Active Listings</h2>
+                  </div>
+                  {activeListings.length > 0 && (
+                    <span className="text-xs text-accent/60 font-mono bg-accent/5 px-2 py-0.5 rounded-full border border-accent/10">{activeListings.length} For Sale</span>
+                  )}
+                </div>
+
+                <div className="glass rounded-2xl border-white/5 overflow-hidden shadow-xl">
+                  {isLoadingListings ? (
+                    <div className="py-16 flex flex-col items-center gap-4 text-muted-foreground">
+                      <div className="relative">
+                        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                        <div className="absolute inset-0 blur-lg bg-accent/20 animate-pulse" />
+                      </div>
+                      <span className="text-sm font-medium tracking-wide">Querying SolEstate Market...</span>
+                    </div>
+                  ) : activeListings.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="w-16 h-16 rounded-3xl bg-white/[0.02] flex items-center justify-center mb-2 border border-white/5 shadow-inner">
+                        <Tag className="w-7 h-7 opacity-10" />
+                      </div>
+                      <span className="text-sm font-semibold text-white/40">No active listings found</span>
+                      <p className="text-xs opacity-40 max-w-[200px] text-center leading-relaxed">Your P2P market listings will appear here once confirmed</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-white/[0.02] border-b border-white/5">
+                          <tr>
+                            <th className="px-6 py-4 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] w-[40%]">Investment</th>
+                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Quantity</th>
+                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">List Price</th>
+                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Est. Return</th>
+                            <th className="px-6 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Control</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeListings.map((listing, idx) => {
+                             const property = PROPERTIES.find(p => p.tokenMint === listing.account.tokenMint.toBase58())
+                             const tokens = listing.account.tokenAmount.toNumber()
+                             const pricePerToken = listing.account.pricePerTokenLamports.toNumber() / 1e9
+                             const total = (tokens * pricePerToken).toFixed(4)
+
+                             return (
+                               <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.01] transition-all group">
+                                 <td className="px-6 py-5">
+                                   <div className="flex items-center gap-4">
+                                      <div className="w-10 h-10 rounded-xl overflow-hidden relative border border-white/10 shadow-lg shrink-0">
+                                        <Image src={property?.image ?? ''} alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-bold text-white truncate">{property?.name ?? 'Unknown Asset'}</p>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                          <span className="text-[10px] text-accent font-mono tracking-wider">LISTED ON SECONDARY</span>
+                                        </div>
+                                      </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-5 text-right font-mono text-sm text-white/80">{tokens} <span className="text-[10px] text-white/20 ml-0.5">SHR</span></td>
+                                 <td className="px-4 py-5 text-right font-mono text-sm text-accent">{pricePerToken.toFixed(3)} <span className="text-[10px] opacity-60">SOL</span></td>
+                                 <td className="px-4 py-5 text-right font-mono text-sm text-white">{total} <span className="text-[10px] opacity-40">SOL</span></td>
+                                 <td className="px-6 py-5 text-right">
+                                   <button 
+                                     onClick={async () => {
+                                       if (!confirm('Are you sure you want to delist these tokens? They will be returned to your wallet.')) return
+                                       const wallet = (window as any).phantom?.solana
+                                       try {
+                                         if (property) {
+                                           await cancelSaleListing(wallet, property.id)
+                                           refreshListings()
+                                         }
+                                       } catch (e) {
+                                         console.error(e)
+                                       }
+                                     }}
+                                     className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30"
+                                   >
+                                     CANCEL LISTING
+                                   </button>
+                                 </td>
+                               </tr>
+                             )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -510,6 +611,22 @@ export default function PortfolioPage() {
       </main>
 
       <Footer />
+
+      {sellModalData && (
+        <SellModal
+          isOpen={sellModalData.isOpen}
+          onClose={() => setSellModalData(null)}
+          property={sellModalData.property}
+          maxTokens={sellModalData.tokens}
+          onSell={async (amt, prc) => {
+            const wallet = (window as any).phantom?.solana
+            const priceLamports = Math.floor(prc * 1e9)
+            await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
+            refreshListings()
+            alert('Successfully listed for sale!')
+          }}
+        />
+      )}
     </div>
   )
 }

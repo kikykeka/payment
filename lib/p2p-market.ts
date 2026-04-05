@@ -14,20 +14,20 @@ function getProvider(wallet: any) {
 export async function createSaleListing(
   wallet: any,
   propertyId: string,
-  tokenMint: string,
   tokenAmount: number,
   pricePerTokenLamports: number
 ) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const seller = new PublicKey(wallet.publicKey.toString())
-  const mintPk = new PublicKey(tokenMint)
-
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   const [propertyPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
     PROGRAM_ID
   )
+
+  const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+  const mintPk = propAccount.tokenMint as PublicKey
 
   const [saleListingPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
@@ -40,6 +40,12 @@ export async function createSaleListing(
   )
 
   const sellerTokenAccount = getAssociatedTokenAddressSync(mintPk, seller, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
+  
+  // Check if listing already exists to prevent simulation error
+  const existingAccount = await connection.getAccountInfo(saleListingPda)
+  if (existingAccount) {
+    throw new Error('You already have an active listing for this property. Please cancel the existing listing before creating a new one.')
+  }
 
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
     .accounts({
@@ -59,19 +65,19 @@ export async function createSaleListing(
 
 export async function cancelSaleListing(
   wallet: any,
-  propertyId: string,
-  tokenMint: string
+  propertyId: string
 ) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const seller = new PublicKey(wallet.publicKey.toString())
-  const mintPk = new PublicKey(tokenMint)
-
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   const [propertyPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
     PROGRAM_ID
   )
+
+  const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+  const mintPk = propAccount.tokenMint as PublicKey
 
   const [saleListingPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
@@ -103,20 +109,20 @@ export async function cancelSaleListing(
 export async function executeSale(
   wallet: any,
   sellerStr: string,
-  propertyId: string,
-  tokenMint: string
+  propertyId: string
 ) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const buyer = new PublicKey(wallet.publicKey.toString())
   const seller = new PublicKey(sellerStr)
-  const mintPk = new PublicKey(tokenMint)
-
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   const [propertyPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
     PROGRAM_ID
   )
+
+  const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+  const mintPk = propAccount.tokenMint as PublicKey
   const [treasuryPda] = PublicKey.findProgramAddressSync([Buffer.from("treasury")], PROGRAM_ID)
 
   const [saleListingPda] = PublicKey.findProgramAddressSync(
@@ -152,20 +158,20 @@ export async function executeSale(
 export async function lockTokens(
   wallet: any,
   propertyId: string,
-  tokenMint: string,
   tokenAmount: number,
   lockDurationDays: number
 ) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const investor = new PublicKey(wallet.publicKey.toString())
-  const mintPk = new PublicKey(tokenMint)
-
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   const [propertyPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
     PROGRAM_ID
   )
+
+  const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+  const mintPk = propAccount.tokenMint as PublicKey
 
   const [lockupPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("lockup"), investor.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
@@ -197,19 +203,19 @@ export async function lockTokens(
 
 export async function unlockTokens(
   wallet: any,
-  propertyId: string,
-  tokenMint: string
+  propertyId: string
 ) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const investor = new PublicKey(wallet.publicKey.toString())
-  const mintPk = new PublicKey(tokenMint)
-
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   const [propertyPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
     PROGRAM_ID
   )
+
+  const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+  const mintPk = propAccount.tokenMint as PublicKey
 
   const [lockupPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("lockup"), investor.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
@@ -232,8 +238,28 @@ export async function unlockTokens(
       tokenMint: mintPk,
       registry: registryPda,
       investor,
-      tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
     .rpc()
+}
+
+export async function fetchAllUserListings(wallet: any) {
+  const provider = getProvider(wallet)
+  const program = new Program(IDL as any, provider)
+  const seller = new PublicKey(wallet.publicKey.toString())
+
+  // Fetch all SaleListing accounts where seller matches
+  const listings = await (program.account as any).saleListing.all([
+    {
+      memcmp: {
+        offset: 8, // Discriminator
+        bytes: seller.toBase58(),
+      },
+    },
+  ])
+
+  return listings.map((l: any) => ({
+    publicKey: l.publicKey,
+    account: l.account,
+  }))
 }

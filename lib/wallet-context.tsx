@@ -214,7 +214,15 @@ export const IDL = {
   accounts: [
     {
       name: "PropertyState",
-      discriminator: [207, 94, 222, 94, 178, 10, 5, 93] // Actual hash of 'account:PropertyState'
+      discriminator: [207, 94, 222, 94, 178, 10, 5, 93]
+    },
+    {
+      name: "SaleListing",
+      discriminator: [100, 203, 115, 202, 178, 12, 169, 137]
+    },
+    {
+      name: "InvestorLockup",
+      discriminator: [111, 237, 240, 151, 160, 232, 186, 230]
     }
   ],
   types: [
@@ -231,10 +239,41 @@ export const IDL = {
           { name: "pricePerTokenLamports", type: "u64" },
           { name: "annualYieldBps", type: "u16" },
           { name: "isActive", type: "bool" },
-          { name: "totalRaisedLamports", "type": "u64" },
-          { name: "investorCount", "type": "u32" },
-          { name: "createdAt", "type": "i64" },
-          { name: "bump", "type": "u8" }
+          { name: "totalRaisedLamports", type: "u64" },
+          { name: "investorCount", type: "u32" },
+          { name: "createdAt", type: "i64" },
+          { name: "bump", type: "u8" }
+        ]
+      }
+    },
+    {
+      name: "SaleListing",
+      type: {
+        kind: "struct",
+        fields: [
+          { name: "seller", type: "pubkey" },
+          { name: "property", type: "pubkey" },
+          { name: "tokenMint", type: "pubkey" },
+          { name: "tokenAmount", type: "u64" },
+          { name: "pricePerTokenLamports", type: "u64" },
+          { name: "isActive", type: "bool" },
+          { name: "createdAt", type: "i64" },
+          { name: "bump", type: "u8" }
+        ]
+      }
+    },
+    {
+      name: "InvestorLockup",
+      type: {
+        kind: "struct",
+        fields: [
+          { name: "investor", type: "pubkey" },
+          { name: "property", type: "pubkey" },
+          { name: "tokenMint", type: "pubkey" },
+          { name: "lockedTokens", type: "u64" },
+          { name: "lockUntil", type: "i64" },
+          { name: "yieldBonusBps", type: "u16" },
+          { name: "bump", type: "u8" }
         ]
       }
     }
