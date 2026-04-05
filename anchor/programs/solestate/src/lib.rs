@@ -4,6 +4,21 @@ use anchor_spl::metadata::{create_metadata_accounts_v3, CreateMetadataAccountsV3
 
 declare_id!("5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN");
 
+// ── Platform constants (outside program module) ──────────────────────────
+// 2% platform fee on all P2P secondary market sales
+const PLATFORM_FEE_BPS: u64 = 200;
+
+/// Returns bonus yield (basis points) based on lock duration.
+fn lockup_bonus_bps(lock_duration_days: u64) -> u16 {
+    match lock_duration_days {
+        d if d >= 365 => 500,
+        d if d >= 180 => 300,
+        d if d >= 90  => 200,
+        d if d >= 30  => 100,
+        _             => 0,
+    }
+}
+
 // ─────────────────────────────────────────────
 // SolEstate — Real World Asset Tokenization
 // Network: Solana Devnet
@@ -393,6 +408,262 @@ pub mod solestate {
         msg!("Metadata created for {}", ctx.accounts.property.id);
         Ok(())
     }
+
+    // ─── 9. Initialize Platform Treasury ─────────────────────────────────────
+    pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
+        let treasury = &mut ctx.accounts.treasury;
+        treasury.total_collected_lamports = 0;
+        treasury.bump = ctx.bumps.treasury;
+        msg!("Treasury initialized");
+        Ok(())
+    }
+
+    // ─── 10. Lock tokens for bonus yield ──────────────────────────────────────
+    /// Investor transfers tokens to a PDA vault and earns bonus yield.
+    pub fn lock_tokens(
+        ctx: Context<LockTokens>,
+        token_amount: u64,
+        lock_duration_days: u64,
+    ) -> Result<()> {
+        require!(token_amount > 0, SolEstateError::InvalidTokenCount);
+        require!(lock_duration_days >= 30, SolEstateError::LockDurationTooShort);
+
+        let lockup = &mut ctx.accounts.lockup;
+        let clock = Clock::get()?;
+        lockup.investor       = ctx.accounts.investor.key();
+        lockup.property       = ctx.accounts.property.key();
+        lockup.token_mint     = ctx.accounts.token_mint.key();
+        lockup.locked_tokens  = token_amount;
+        lockup.lock_until     = clock.unix_timestamp + (lock_duration_days as i64) * 86400;
+        lockup.yield_bonus_bps = lockup_bonus_bps(lock_duration_days);
+        lockup.bump           = ctx.bumps.lockup;
+
+        // Transfer tokens from investor ATA → lockup vault PDA
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.investor_token_account.to_account_info(),
+                    to: ctx.accounts.lockup_vault.to_account_info(),
+                    authority: ctx.accounts.investor.to_account_info(),
+                },
+            ),
+            token_amount * 1_000_000,
+        )?;
+
+        msg!(
+            "Locked {} tokens for {} days. Bonus yield: +{}bps. Unlock at: {}",
+            token_amount, lock_duration_days, lockup.yield_bonus_bps, lockup.lock_until
+        );
+        Ok(())
+    }
+
+    // ─── 11. Unlock tokens after lock period expires ───────────────────────────
+    pub fn unlock_tokens(ctx: Context<UnlockTokens>) -> Result<()> {
+        let clock = Clock::get()?;
+        require!(
+            clock.unix_timestamp >= ctx.accounts.lockup.lock_until,
+            SolEstateError::LockupNotExpired
+        );
+
+        let lockup = &ctx.accounts.lockup;
+        let locked = lockup.locked_tokens;
+        let investor_key = lockup.investor;
+        let property_key = lockup.property;
+        let mint_key = lockup.token_mint;
+        let bump = lockup.bump;
+
+        // Sign as the lockup PDA
+        let seeds = &[
+            b"lockup",
+            investor_key.as_ref(),
+            property_key.as_ref(),
+            mint_key.as_ref(),
+            &[bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        // Transfer tokens from vault → investor
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.lockup_vault.to_account_info(),
+                    to: ctx.accounts.investor_token_account.to_account_info(),
+                    authority: ctx.accounts.lockup.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            locked * 1_000_000,
+        )?;
+
+        msg!("Unlocked {} tokens", locked);
+        Ok(())
+    }
+
+    // ─── 12. Create P2P sale listing ──────────────────────────────────────────
+    pub fn create_sale_listing(
+        ctx: Context<CreateSaleListing>,
+        token_amount: u64,
+        price_per_token_lamports: u64,
+    ) -> Result<()> {
+        require!(token_amount > 0, SolEstateError::InvalidTokenCount);
+        require!(price_per_token_lamports > 0, SolEstateError::InvalidPrice);
+
+        let listing = &mut ctx.accounts.sale_listing;
+        let clock = Clock::get()?;
+        listing.seller                  = ctx.accounts.seller.key();
+        listing.property                = ctx.accounts.property.key();
+        listing.token_mint              = ctx.accounts.token_mint.key();
+        listing.token_amount            = token_amount;
+        listing.price_per_token_lamports = price_per_token_lamports;
+        listing.is_active               = true;
+        listing.created_at              = clock.unix_timestamp;
+        listing.bump                    = ctx.bumps.sale_listing;
+
+        // Transfer tokens from seller → escrow vault
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.seller_token_account.to_account_info(),
+                    to: ctx.accounts.listing_vault.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                },
+            ),
+            token_amount * 1_000_000,
+        )?;
+
+        msg!("Sale listing created: {} tokens at {} lamports each", token_amount, price_per_token_lamports);
+        Ok(())
+    }
+
+    // ─── 13. Cancel P2P sale listing ──────────────────────────────────────────
+    pub fn cancel_sale_listing(ctx: Context<CancelSaleListing>) -> Result<()> {
+        let listing = &mut ctx.accounts.sale_listing;
+        require!(listing.is_active, SolEstateError::ListingNotActive);
+        require!(listing.seller == ctx.accounts.seller.key(), SolEstateError::Unauthorized);
+
+        let seller_key  = listing.seller;
+        let property_key = listing.property;
+        let mint_key    = listing.token_mint;
+        let amount      = listing.token_amount;
+        let bump        = listing.bump;
+
+        listing.is_active = false;
+
+        let seeds = &[
+            b"sale_listing",
+            seller_key.as_ref(),
+            property_key.as_ref(),
+            mint_key.as_ref(),
+            &[bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        // Return tokens to seller
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.listing_vault.to_account_info(),
+                    to: ctx.accounts.seller_token_account.to_account_info(),
+                    authority: ctx.accounts.sale_listing.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount * 1_000_000,
+        )?;
+
+        msg!("Listing cancelled, {} tokens returned to seller", amount);
+        Ok(())
+    }
+
+    // ─── 14. Execute P2P sale (buyer purchases from listing) ──────────────────
+    pub fn execute_sale(ctx: Context<ExecuteSale>) -> Result<()> {
+        let listing = &ctx.accounts.sale_listing;
+        require!(listing.is_active, SolEstateError::ListingNotActive);
+
+        let total_cost = listing.price_per_token_lamports
+            .checked_mul(listing.token_amount)
+            .ok_or(SolEstateError::ArithmeticOverflow)?;
+
+        // Calculate platform fee (2%)
+        let fee = total_cost
+            .checked_mul(PLATFORM_FEE_BPS)
+            .ok_or(SolEstateError::ArithmeticOverflow)?
+            .checked_div(10_000)
+            .ok_or(SolEstateError::ArithmeticOverflow)?;
+        let seller_receives = total_cost.checked_sub(fee).ok_or(SolEstateError::ArithmeticOverflow)?;
+
+        let seller_key  = listing.seller;
+        let property_key = listing.property;
+        let mint_key    = listing.token_mint;
+        let amount      = listing.token_amount;
+        let bump        = listing.bump;
+
+        // Mark listing as inactive
+        let listing_mut = &mut ctx.accounts.sale_listing;
+        listing_mut.is_active = false;
+
+        // Transfer SOL: buyer → seller (minus fee)
+        anchor_lang::solana_program::program::invoke(
+            &anchor_lang::solana_program::system_instruction::transfer(
+                &ctx.accounts.buyer.key(),
+                &ctx.accounts.seller.key(),
+                seller_receives,
+            ),
+            &[
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.seller.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        // Transfer SOL: buyer → treasury (fee)
+        anchor_lang::solana_program::program::invoke(
+            &anchor_lang::solana_program::system_instruction::transfer(
+                &ctx.accounts.buyer.key(),
+                &ctx.accounts.treasury.key(),
+                fee,
+            ),
+            &[
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.treasury.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+        ctx.accounts.treasury.total_collected_lamports += fee;
+
+        let seeds = &[
+            b"sale_listing",
+            seller_key.as_ref(),
+            property_key.as_ref(),
+            mint_key.as_ref(),
+            &[bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        // Transfer tokens: vault → buyer
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.listing_vault.to_account_info(),
+                    to: ctx.accounts.buyer_token_account.to_account_info(),
+                    authority: ctx.accounts.sale_listing.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount * 1_000_000,
+        )?;
+
+        msg!(
+            "Sale executed: {} tokens sold for {} lamports. Fee: {} lamports",
+            amount, total_cost, fee
+        );
+        Ok(())
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -451,6 +722,48 @@ pub struct Listing {
 impl Listing {
     pub const LEN: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1 + 8 + 1;
 }
+
+#[account]
+pub struct SaleListing {
+    pub seller: Pubkey,                     // 32
+    pub property: Pubkey,                   // 32
+    pub token_mint: Pubkey,                 // 32
+    pub token_amount: u64,                  // 8
+    pub price_per_token_lamports: u64,      // 8
+    pub is_active: bool,                    // 1
+    pub created_at: i64,                    // 8
+    pub bump: u8,                           // 1
+}
+
+impl SaleListing {
+    pub const LEN: usize = 8 + 32 + 32 + 32 + 8 + 8 + 1 + 8 + 1;
+}
+
+#[account]
+pub struct InvestorLockup {
+    pub investor: Pubkey,                   // 32
+    pub property: Pubkey,                   // 32
+    pub token_mint: Pubkey,                 // 32
+    pub locked_tokens: u64,                 // 8
+    pub lock_until: i64,                    // 8  (unix timestamp)
+    pub yield_bonus_bps: u16,              // 2
+    pub bump: u8,                           // 1
+}
+
+impl InvestorLockup {
+    pub const LEN: usize = 8 + 32 + 32 + 32 + 8 + 8 + 2 + 1;
+}
+
+#[account]
+pub struct PlatformTreasury {
+    pub total_collected_lamports: u64,      // 8
+    pub bump: u8,                           // 1
+}
+
+impl PlatformTreasury {
+    pub const LEN: usize = 8 + 8 + 1;
+}
+
 
 // ─────────────────────────────────────────────
 // Context definitions
@@ -776,6 +1089,210 @@ pub struct CreatePropertyMetadata<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[derive(Accounts)]
+pub struct InitializeTreasury<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = PlatformTreasury::LEN,
+        seeds = [b"treasury"],
+        bump
+    )]
+    pub treasury: Account<'info, PlatformTreasury>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct LockTokens<'info> {
+    #[account(
+        init,
+        payer = investor,
+        space = InvestorLockup::LEN,
+        seeds = [b"lockup", investor.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub lockup: Box<Account<'info, InvestorLockup>>,
+
+    /// CHECK: token vault owned by lockup PDA
+    #[account(
+        init,
+        payer = investor,
+        token::mint = token_mint,
+        token::authority = lockup,
+        seeds = [b"lockup_vault", investor.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub lockup_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, constraint = investor_token_account.owner == investor.key())]
+    pub investor_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()], bump = property.bump)]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    pub token_mint: Box<Account<'info, Mint>>,
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub investor: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct UnlockTokens<'info> {
+    #[account(
+        mut,
+        close = investor,
+        seeds = [b"lockup", investor.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump = lockup.bump
+    )]
+    pub lockup: Box<Account<'info, InvestorLockup>>,
+
+    #[account(
+        mut,
+        seeds = [b"lockup_vault", investor.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub lockup_vault: Account<'info, TokenAccount>,
+
+    #[account(mut, constraint = investor_token_account.owner == investor.key())]
+    pub investor_token_account: Account<'info, TokenAccount>,
+
+    #[account(seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()], bump = property.bump)]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    pub token_mint: Account<'info, Mint>,
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub investor: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CreateSaleListing<'info> {
+    #[account(
+        init,
+        payer = seller,
+        space = SaleListing::LEN,
+        seeds = [b"sale_listing", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub sale_listing: Box<Account<'info, SaleListing>>,
+
+    /// Token escrow vault owned by the sale_listing PDA
+    #[account(
+        init,
+        payer = seller,
+        token::mint = token_mint,
+        token::authority = sale_listing,
+        seeds = [b"listing_vault", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub listing_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, constraint = seller_token_account.owner == seller.key())]
+    pub seller_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()], bump = property.bump)]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    pub token_mint: Box<Account<'info, Mint>>,
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct CancelSaleListing<'info> {
+    #[account(
+        mut,
+        seeds = [b"sale_listing", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump = sale_listing.bump
+    )]
+    pub sale_listing: Account<'info, SaleListing>,
+
+    #[account(
+        mut,
+        seeds = [b"listing_vault", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub listing_vault: Account<'info, TokenAccount>,
+
+    #[account(mut, constraint = seller_token_account.owner == seller.key())]
+    pub seller_token_account: Account<'info, TokenAccount>,
+
+    #[account(seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()], bump = property.bump)]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    pub token_mint: Account<'info, Mint>,
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub seller: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteSale<'info> {
+    #[account(
+        mut,
+        seeds = [b"sale_listing", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump = sale_listing.bump
+    )]
+    pub sale_listing: Account<'info, SaleListing>,
+
+    #[account(
+        mut,
+        seeds = [b"listing_vault", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub listing_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = token_mint,
+        associated_token::authority = buyer,
+    )]
+    pub buyer_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut, seeds = [b"treasury"], bump = treasury.bump)]
+    pub treasury: Account<'info, PlatformTreasury>,
+
+    #[account(seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()], bump = property.bump)]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    pub token_mint: Account<'info, Mint>,
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    /// CHECK: just receiving SOL
+    #[account(mut, constraint = seller.key() == sale_listing.seller)]
+    pub seller: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, anchor_spl::associated_token::AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
 #[error_code]
 pub enum SolEstateError {
     #[msg("Property is not active for investment")]
@@ -794,4 +1311,8 @@ pub enum SolEstateError {
     ListingNotActive,
     #[msg("Unauthorized")]
     Unauthorized,
+    #[msg("Lock duration must be at least 30 days")]
+    LockDurationTooShort,
+    #[msg("Lockup period has not expired yet")]
+    LockupNotExpired,
 }

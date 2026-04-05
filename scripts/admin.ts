@@ -41,6 +41,16 @@ const IDL = {
       args: []
     },
     {
+      name: "initializeTreasury",
+      discriminator: [124, 186, 211, 195, 85, 165, 129, 166],
+      accounts: [
+        { name: "treasury", writable: true },
+        { name: "admin", writable: true, signer: true },
+        { name: "systemProgram" }
+      ],
+      args: []
+    },
+    {
       name: "listProperty",
       discriminator: [254, 101, 42, 174, 220, 160, 42, 82],
       accounts: [
@@ -141,6 +151,29 @@ async function main() {
   } else {
     console.log("Registry already initialized at:", registryPda.toBase58());
   }
+
+  const [treasuryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("treasury")],
+    PROGRAM_ID
+  );
+
+  console.log("Checking if treasury is initialized...");
+  let treasuryInfo = await connection.getAccountInfo(treasuryPda);
+
+  if (!treasuryInfo) {
+    console.log("Initializing treasury...");
+    await program.methods.initializeTreasury()
+      .accounts({
+        treasury: treasuryPda,
+        admin: adminKeypair.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log("Treasury initialized at:", treasuryPda.toBase58());
+  } else {
+    console.log("Treasury already initialized at:", treasuryPda.toBase58());
+  }
+
 
   console.log(`\nFound ${properties.length} properties in the frontend config. Syncing to blockchain...`);
 

@@ -105,7 +105,7 @@ const connection = new Connection(DEVNET, 'confirmed')
 
 const PROGRAM_ID = new PublicKey("5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN")
 
-const IDL = {
+export const IDL = {
   address: "5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN",
   metadata: { name: "solestate", version: "0.1.0", spec: "0.1.0" },
   instructions: [
@@ -124,6 +124,91 @@ const IDL = {
         { name: "systemProgram" }
       ],
       args: [{ name: "tokenAmount", type: "u64" }]
+    },
+    {
+      name: "lockTokens",
+      discriminator: [136, 11, 32, 232, 161, 117, 54, 211],
+      accounts: [
+        { name: "lockup", writable: true },
+        { name: "lockupVault", writable: true },
+        { name: "investorTokenAccount", writable: true },
+        { name: "property", writable: true },
+        { name: "tokenMint" },
+        { name: "registry" },
+        { name: "investor", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "systemProgram" },
+        { name: "rent" }
+      ],
+      args: [{ name: "tokenAmount", type: "u64" }, { name: "lockDurationDays", type: "u64" }]
+    },
+    {
+      name: "unlockTokens",
+      discriminator: [233, 35, 95, 159, 37, 185, 47, 88],
+      accounts: [
+        { name: "lockup", writable: true },
+        { name: "lockupVault", writable: true },
+        { name: "investorTokenAccount", writable: true },
+        { name: "property" },
+        { name: "tokenMint" },
+        { name: "registry" },
+        { name: "investor", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "systemProgram" }
+      ],
+      args: []
+    },
+    {
+      name: "createSaleListing",
+      discriminator: [73, 149, 159, 221, 165, 15, 130, 126],
+      accounts: [
+        { name: "saleListing", writable: true },
+        { name: "listingVault", writable: true },
+        { name: "sellerTokenAccount", writable: true },
+        { name: "property" },
+        { name: "tokenMint" },
+        { name: "registry" },
+        { name: "seller", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "systemProgram" },
+        { name: "rent" }
+      ],
+      args: [{ name: "tokenAmount", type: "u64" }, { name: "pricePerTokenLamports", type: "u64" }]
+    },
+    {
+      name: "cancelSaleListing",
+      discriminator: [225, 101, 236, 250, 241, 94, 141, 24],
+      accounts: [
+        { name: "saleListing", writable: true },
+        { name: "listingVault", writable: true },
+        { name: "sellerTokenAccount", writable: true },
+        { name: "property" },
+        { name: "tokenMint" },
+        { name: "registry" },
+        { name: "seller", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "systemProgram" }
+      ],
+      args: []
+    },
+    {
+      name: "executeSale",
+      discriminator: [37, 74, 217, 157, 79, 49, 35, 6],
+      accounts: [
+        { name: "saleListing", writable: true },
+        { name: "listingVault", writable: true },
+        { name: "buyerTokenAccount", writable: true },
+        { name: "treasury", writable: true },
+        { name: "property" },
+        { name: "tokenMint" },
+        { name: "registry" },
+        { name: "seller", writable: true },
+        { name: "buyer", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "associatedTokenProgram" },
+        { name: "systemProgram" }
+      ],
+      args: []
     }
   ],
   accounts: [

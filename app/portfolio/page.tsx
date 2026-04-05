@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { properties as PROPERTIES } from '@/lib/properties'
 import Image from 'next/image'
 import {
   Wallet,
@@ -356,12 +357,79 @@ export default function PortfolioPage() {
                             <td className="px-4 py-4 text-right text-accent">+{monthly.toFixed(4)} SOL</td>
                             <td className="px-6 py-4 text-right">
                               {propertyId && (
-                                <Link
-                                  href={`/marketplace/${propertyId}`}
-                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                >
-                                  View <ArrowUpRight className="w-3 h-3" />
-                                </Link>
+                                <div className="flex items-center justify-end gap-3">
+                                  <Link
+                                    href={`/marketplace/${propertyId}`}
+                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                                  >
+                                    View
+                                  </Link>
+                                  <button
+                                    onClick={async () => {
+                                      const priceStr = window.prompt(`How much SOL do you want for 1 token of ${item.name}? (e.g. 0.05)`)
+                                      if (!priceStr) return
+                                      const priceSol = parseFloat(priceStr)
+                                      if (isNaN(priceSol) || priceSol <= 0) return alert('Invalid price')
+                                      
+                                      const tokensStr = window.prompt(`How many tokens to sell? (Max: ${item.tokens})`)
+                                      if (!tokensStr) return
+                                      const tokens = parseInt(tokensStr, 10)
+                                      if (isNaN(tokens) || tokens <= 0 || tokens > item.tokens) return alert('Invalid token amount')
+
+                                      const tokenMint = PROPERTIES.find(p => p.id === propertyId)?.tokenMint
+                                      if (!tokenMint) return alert('Token mint not found')
+                                      
+                                      const wallet = (window as any).phantom?.solana
+                                      if (!wallet) return alert('Connect wallet first')
+
+                                      try {
+                                        const { createSaleListing } = await import('@/lib/p2p-market')
+                                        const priceLamports = priceSol * 1e9
+                                        const sig = await createSaleListing(wallet, propertyId, tokenMint, tokens, priceLamports)
+                                        console.log('Listing created:', sig)
+                                        alert('Successfully listed for sale!')
+                                      } catch (e: any) {
+                                        console.error(e)
+                                        alert('Error: ' + e.message)
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-semibold"
+                                  >
+                                    Sell
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      const tokensStr = window.prompt(`How many tokens to lock? (Max: ${item.tokens})`)
+                                      if (!tokensStr) return
+                                      const tokens = parseInt(tokensStr, 10)
+                                      if (isNaN(tokens) || tokens <= 0 || tokens > item.tokens) return alert('Invalid token amount')
+                                      
+                                      const durationStr = window.prompt(`Lock duration in days? (Options: 30, 90, 180, 365)`)
+                                      if (!durationStr) return
+                                      const duration = parseInt(durationStr, 10)
+                                      if (![30, 90, 180, 365].includes(duration)) return alert('Must be 30, 90, 180, or 365 days')
+
+                                      const tokenMint = PROPERTIES.find(p => p.id === propertyId)?.tokenMint
+                                      if (!tokenMint) return alert('Token mint not found')
+                                      
+                                      const wallet = (window as any).phantom?.solana
+                                      if (!wallet) return alert('Connect wallet first')
+
+                                      try {
+                                        const { lockTokens } = await import('@/lib/p2p-market')
+                                        const sig = await lockTokens(wallet, propertyId, tokenMint, tokens, duration)
+                                        console.log('Tokens locked:', sig)
+                                        alert(`Successfully locked ${tokens} tokens for ${duration} days!`)
+                                      } catch (e: any) {
+                                        console.error(e)
+                                        alert('Error: ' + e.message)
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
+                                  >
+                                    Lock
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -379,7 +447,7 @@ export default function PortfolioPage() {
                   <span className="text-xs text-muted-foreground">{purchases.length} transactions</span>
                 </div>
                 <div className="divide-y divide-border/50">
-                  {purchases.map((p) => (
+                  {purchases.map((p: any) => (
                     <div key={p.id} className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/20 transition-colors">
                       {/* Property thumbnail */}
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0">
