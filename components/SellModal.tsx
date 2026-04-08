@@ -87,18 +87,37 @@ export function SellModal({ isOpen, onClose, property, maxTokens, onSell }: Sell
                 <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Number of Tokens</label>
                 <span className="text-[10px] text-accent/80 font-mono">Available: {maxTokens}</span>
               </div>
-              <div className="relative group">
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value))}
-                  max={maxTokens}
-                  min={1}
-                  className="w-full bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary/50 transition-colors group-hover:border-white/10"
-                />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAmount(Math.max(1, amount - 1))}
+                  disabled={amount <= 1}
+                  className="w-10 h-10 bg-[#121214] border border-white/5 rounded-lg text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-lg font-bold"
+                >
+                  −
+                </button>
+                <div className="flex-1 relative">
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => {
+                      const val = Number(e.target.value)
+                      if (val >= 1 && val <= maxTokens) setAmount(val)
+                    }}
+                    max={maxTokens}
+                    min={1}
+                    className="w-full bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-white text-center focus:outline-none focus:border-primary/50 transition-colors"
+                  />
+                </div>
+                <button
+                  onClick={() => setAmount(Math.min(maxTokens, amount + 1))}
+                  disabled={amount >= maxTokens}
+                  className="w-10 h-10 bg-[#121214] border border-white/5 rounded-lg text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-lg font-bold"
+                >
+                  +
+                </button>
                 <button 
                   onClick={() => setAmount(maxTokens)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/10 px-2 py-1 rounded"
+                  className="px-3 py-3 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors bg-primary/10 hover:bg-primary/20 rounded-lg border border-primary/20"
                 >
                   MAX
                 </button>

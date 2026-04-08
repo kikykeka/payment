@@ -384,6 +384,12 @@ export default function PortfolioPage() {
                         const yieldPct = relatedPurchase?.annualYield ?? 0
                         const monthly = (item.sol * (yieldPct / 100)) / 12
                         const propertyId = purchases.find((p) => p.propertyName === item.name)?.propertyId
+                        
+                        // Check if this property already has an active listing
+                        const property = PROPERTIES.find(p => p.id === propertyId)
+                        const hasActiveListing = property && activeListings.some(listing => 
+                          listing.account.tokenMint.toBase58() === property.tokenMint
+                        )
 
                         return (
                           <tr key={item.name} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
@@ -407,21 +413,25 @@ export default function PortfolioPage() {
                             <td className="px-6 py-4 text-right">
                               {propertyId && (
                                 <div className="flex items-center justify-end gap-4">
-                                  <button
-                                    onClick={() => {
-                                      const property = PROPERTIES.find(p => p.id === propertyId)
-                                      if (property) {
-                                        setSellModalData({
-                                          isOpen: true,
-                                          property,
-                                          tokens: item.tokens
-                                        })
-                                      }
-                                    }}
-                                    className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-semibold"
-                                  >
-                                    Sell
-                                  </button>
+                                  {!hasActiveListing ? (
+                                    <button
+                                      onClick={() => {
+                                        const property = PROPERTIES.find(p => p.id === propertyId)
+                                        if (property) {
+                                          setSellModalData({
+                                            isOpen: true,
+                                            property,
+                                            tokens: item.tokens
+                                          })
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-1 text-xs text-accent hover:underline font-semibold"
+                                    >
+                                      Sell
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-white/30 font-medium">Listed</span>
+                                  )}
                                   <button
                                     onClick={async () => {
                                       const tokensStr = window.prompt(`How many tokens to lock? (Max: ${item.tokens})`)
