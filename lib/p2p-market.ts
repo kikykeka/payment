@@ -307,10 +307,13 @@ export async function fetchAllUserListings(wallet: any) {
       if (accountInfo) {
         try {
           const listingAccount = await program.account.saleListing.fetch(saleListingPda)
-          listings.push({
-            publicKey: saleListingPda,
-            account: listingAccount
-          })
+          // Only add if listing is active
+          if (listingAccount.isActive) {
+            listings.push({
+              publicKey: saleListingPda,
+              account: listingAccount
+            })
+          }
         } catch (e: any) {
           // Account exists but can't be decoded - manually decode
           try {
@@ -342,20 +345,22 @@ export async function fetchAllUserListings(wallet: any) {
             // isActive: bool (1 byte)
             const isActive = accountInfo.data[offset] === 1
             
-            const manuallyDecoded = {
-              seller: new PublicKey(sellerBytes),
-              property: new PublicKey(propertyBytes),
-              tokenMint: new PublicKey(tokenMintBytes),
-              tokenAmount,
-              pricePerTokenLamports,
-              isActive
+            // Only add active listings
+            if (isActive) {
+              const manuallyDecoded = {
+                seller: new PublicKey(sellerBytes),
+                property: new PublicKey(propertyBytes),
+                tokenMint: new PublicKey(tokenMintBytes),
+                tokenAmount,
+                pricePerTokenLamports,
+                isActive
+              }
+              
+              listings.push({
+                publicKey: saleListingPda,
+                account: manuallyDecoded
+              })
             }
-            
-            // Add to listings using manually decoded data
-            listings.push({
-              publicKey: saleListingPda,
-              account: manuallyDecoded
-            })
           } catch (decodeError) {
             // Skip this listing if we can't decode it
           }
