@@ -68,6 +68,7 @@ export default function PortfolioPage() {
   const [activeListings, setActiveListings] = useState<any[]>([])
   const [isLoadingListings, setIsLoadingListings] = useState(false)
   const [sellModalData, setSellModalData] = useState<{ isOpen: boolean, property: any, tokens: number } | null>(null)
+  const [cancelConfirmModal, setCancelConfirmModal] = useState<{ isOpen: boolean, property: any, listingIndex: number } | null>(null)
 
   const refreshListings = async () => {
     if (!connected || !publicKey) return
@@ -129,7 +130,8 @@ export default function PortfolioPage() {
       }
     }
     
-    return Array.from(map.values()).sort((a, b) => b.sol - a.sol)
+    // Filter out properties with 0 tokens and sort by investment
+    return Array.from(map.values()).filter(item => item.tokens > 0).sort((a, b) => b.sol - a.sol)
   }, [purchases, activeListings])
 
   // ── Fake cumulative portfolio value chart ────────────────────────────────
@@ -511,18 +513,15 @@ export default function PortfolioPage() {
                              const pricePerToken = listing.account.pricePerTokenLamports.toNumber() / 1e9
                              const total = (tokens * pricePerToken).toFixed(4)
 
-                             // Skip if property not found
-                             if (!property) return null
-
                              return (
                                <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.01] transition-all group">
                                  <td className="px-6 py-5">
                                    <div className="flex items-center gap-4">
                                       <div className="w-10 h-10 rounded-xl overflow-hidden relative border border-white/10 shadow-lg shrink-0">
-                                        <Image src={property.image} alt={property.name} fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        <Image src={property?.image ?? ''} alt={property?.name ?? 'Unknown'} fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
                                       </div>
                                       <div className="min-w-0">
-                                        <p className="text-sm font-bold text-white truncate">{property.name}</p>
+                                        <p className="text-sm font-bold text-white truncate">{property?.name ?? 'Unknown Asset'}</p>
                                         <div className="flex items-center gap-1.5 mt-1">
                                           <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                                           <span className="text-[10px] text-accent font-mono tracking-wider">LISTED ON SECONDARY</span>
@@ -535,26 +534,8 @@ export default function PortfolioPage() {
                                  <td className="px-4 py-5 text-right font-mono text-sm text-white">{total} <span className="text-[10px] opacity-40">SOL</span></td>
                                  <td className="px-6 py-5 text-right">
                                    <button 
-                                     onClick={async () => {
-                                       if (!confirm('Are you sure you want to delist these tokens? They will be returned to your wallet.')) return
-                                       const wallet = (window as any).phantom?.solana
-                                       try {
-                                         if (property) {
-                                           await cancelSaleListing(wallet, property.id)
-                                           toast.success('Listing cancelled!', {
-                                             description: 'Your tokens have been returned to your wallet'
-                                           })
-                                           // Wait a bit for blockchain to process, then refresh
-                                           setTimeout(async () => {
-                                             await refreshListings()
-                                           }, 1500)
-                                         }
-                                       } catch (e: any) {
-                                         console.error(e)
-                                         toast.error('Failed to cancel listing', {
-                                           description: e.message
-                                         })
-                                       }
+                                     onClick={() => {
+                                       setCancelConfirmModal({ isOpen: true, property, listingIndex: idx })
                                      }}
                                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30"
                                    >
@@ -571,7 +552,7 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              {/* ── Transaction history ──────────────────────────────────── */}
+              {/* ── Transaction history ────────────────��─────────────────── */}
               <div className="glass rounded-2xl border-glow overflow-hidden">
                 <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                   <h2 className="text-base font-semibold text-foreground">Transaction History</h2>
@@ -669,6 +650,80 @@ export default function PortfolioPage() {
             }
           }}
         />
+      )}
+
+      {/* Cancel Listing Confirmation Modal */}
+      {cancelConfirmModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white mb-2">Cancel Listing?</h3>
+                <p className="text-sm text-white/60 leading-relaxed">
+                  Are you sure you want to delist these tokens? They will be returned to your wallet.
+                </p>
+              </div>
+            </div>
+
+            {cancelConfirmModal.property && (
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg overflow-hidden relative border border-white/10">
+                    <Image 
+                      src={cancelConfirmModal.property.image} 
+                      alt={cancelConfirmModal.property.name} 
+                      fill 
+                      className="object-cover" 
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{cancelConfirmModal.property.name}</p>
+                    <p className="text-xs text-white/40 font-mono">{cancelConfirmModal.property.location}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCancelConfirmModal(null)}
+                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all border border-white/10"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={async () => {
+                  const wallet = (window as any).phantom?.solana
+                  const property = cancelConfirmModal.property
+                  try {
+                    if (property) {
+                      await cancelSaleListing(wallet, property.id)
+                      toast.success('Listing cancelled!', {
+                        description: 'Your tokens have been returned to your wallet'
+                      })
+                      setCancelConfirmModal(null)
+                      // Wait for blockchain to process, then refresh
+                      setTimeout(async () => {
+                        await refreshListings()
+                      }, 2000)
+                    }
+                  } catch (e: any) {
+                    console.error(e)
+                    toast.error('Failed to cancel listing', {
+                      description: e.message
+                    })
+                  }
+                }}
+                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
