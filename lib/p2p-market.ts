@@ -303,16 +303,24 @@ export async function fetchAllUserListings(wallet: any) {
         PROGRAM_ID
       )
       
-      // Try to fetch the listing account
-      try {
-        const listingAccount = await program.account.saleListing.fetch(saleListingPda)
-        console.log('[v0] Found listing for property:', property.id, listingAccount)
-        listings.push({
-          publicKey: saleListingPda,
-          account: listingAccount
-        })
-      } catch (e) {
-        // No listing exists for this property, that's fine
+      // Try to fetch the listing account using raw getAccountInfo first
+      const accountInfo = await connection.getAccountInfo(saleListingPda)
+      console.log('[v0] Account info for', property.id, ':', accountInfo ? 'EXISTS' : 'NULL')
+      
+      if (accountInfo) {
+        try {
+          const listingAccount = await program.account.saleListing.fetch(saleListingPda)
+          console.log('[v0] Found listing for property:', property.id, listingAccount)
+          listings.push({
+            publicKey: saleListingPda,
+            account: listingAccount
+          })
+        } catch (e: any) {
+          console.error('[v0] Error fetching listing account for', property.id, ':', e.message)
+          // Account exists but can't be decoded - try getting raw data
+          console.log('[v0] Raw account owner:', accountInfo.owner.toBase58())
+          console.log('[v0] Raw account data length:', accountInfo.data.length)
+        }
       }
     } catch (e) {
       console.error('[v0] Error checking property:', property.id, e)
