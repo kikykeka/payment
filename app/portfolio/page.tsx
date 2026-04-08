@@ -387,9 +387,12 @@ export default function PortfolioPage() {
                         
                         // Check if this property already has an active listing
                         const property = PROPERTIES.find(p => p.id === propertyId)
-                        const hasActiveListing = property && activeListings.some(listing => 
-                          listing.account.tokenMint.toBase58() === property.tokenMint
-                        )
+                        const hasActiveListing = property && activeListings.some(listing => {
+                          const listingMint = listing.account.tokenMint.toBase58()
+                          const propertyMint = property.tokenMint
+                          console.log('[v0] Comparing mints:', { listingMint, propertyMint, match: listingMint === propertyMint })
+                          return listingMint === propertyMint
+                        })
 
                         return (
                           <tr key={item.name} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
@@ -562,7 +565,7 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              {/* ── Transaction history ────────────────��─────────────────── */}
+              {/* ── Transaction history ────────────────��─────���───────────── */}
               <div className="glass rounded-2xl border-glow overflow-hidden">
                 <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                   <h2 className="text-base font-semibold text-foreground">Transaction History</h2>

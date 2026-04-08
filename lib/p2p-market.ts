@@ -71,10 +71,24 @@ export async function createSaleListing(
 
   const sellerTokenAccount = getAssociatedTokenAddressSync(mintPk, seller, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
   
-  // Check if listing already exists to provide better error message
+  // Check if an ACTIVE listing already exists
   const existingAccount = await connection.getAccountInfo(saleListingPda)
   if (existingAccount) {
-    throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
+    // Decode to check if it's active
+    try {
+      const listing = await program.account.saleListing.fetch(saleListingPda)
+      if (listing.isActive) {
+        throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
+      }
+    } catch (e: any) {
+      // If we can't decode, manually check the isActive byte
+      if (existingAccount.data.length >= 113) { // 8 + 32 + 32 + 32 + 8 + 8 + 1
+        const isActive = existingAccount.data[112] === 1
+        if (isActive) {
+          throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
+        }
+      }
+    }
   }
 
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
