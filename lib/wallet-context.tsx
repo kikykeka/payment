@@ -319,11 +319,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             // Check if user has tokens
             const accountInfo = await connection.getAccountInfo(userTokenAccount)
             if (accountInfo) {
+              // Get mint info to check decimals
+              const mintInfo = await connection.getAccountInfo(mintPk)
+              let decimals = 6 // Default to 6 decimals
+              
+              if (mintInfo && mintInfo.data.length >= 44) {
+                // Mint account structure: decimals is at byte 44
+                decimals = mintInfo.data[44]
+              }
+              
               // Parse token account data to get amount
               // Token account: 32 bytes mint + 32 bytes owner + 8 bytes amount + ...
               const data = accountInfo.data
               if (data.length >= 72) {
-                const amount = Number(new BN(data.slice(64, 72), 'le'))
+                const rawAmount = Number(new BN(data.slice(64, 72), 'le'))
+                // Convert from raw amount to actual tokens by dividing by 10^decimals
+                const amount = rawAmount / Math.pow(10, decimals)
                 
                 if (amount > 0) {
                   // Create a purchase record from token ownership
