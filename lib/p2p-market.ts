@@ -317,9 +317,67 @@ export async function fetchAllUserListings(wallet: any) {
           })
         } catch (e: any) {
           console.error('[v0] Error fetching listing account for', property.id, ':', e.message)
-          // Account exists but can't be decoded - try getting raw data
+          // Account exists but can't be decoded - log discriminator
+          const discriminator = accountInfo.data.slice(0, 8)
           console.log('[v0] Raw account owner:', accountInfo.owner.toBase58())
           console.log('[v0] Raw account data length:', accountInfo.data.length)
+          console.log('[v0] Account discriminator (first 8 bytes):', Array.from(discriminator))
+          
+          // Try to manually decode the account
+          try {
+            // Manually parse the account data
+            let offset = 8 // Skip discriminator
+            
+            // seller: PublicKey (32 bytes)
+            const sellerBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // property: PublicKey (32 bytes)  
+            const propertyBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // tokenMint: PublicKey (32 bytes)
+            const tokenMintBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // tokenAmount: u64 (8 bytes)
+            const tokenAmountBytes = accountInfo.data.slice(offset, offset + 8)
+            const tokenAmount = new BN(tokenAmountBytes, 'le')
+            offset += 8
+            
+            // pricePerTokenLamports: u64 (8 bytes)
+            const priceBytes = accountInfo.data.slice(offset, offset + 8)
+            const pricePerTokenLamports = new BN(priceBytes, 'le')
+            offset += 8
+            
+            // isActive: bool (1 byte)
+            const isActive = accountInfo.data[offset] === 1
+            
+            const manuallyDecoded = {
+              seller: new PublicKey(sellerBytes),
+              property: new PublicKey(propertyBytes),
+              tokenMint: new PublicKey(tokenMintBytes),
+              tokenAmount,
+              pricePerTokenLamports,
+              isActive
+            }
+            
+            console.log('[v0] Manually decoded listing:', {
+              seller: manuallyDecoded.seller.toBase58(),
+              tokenMint: manuallyDecoded.tokenMint.toBase58(),
+              tokenAmount: manuallyDecoded.tokenAmount.toNumber(),
+              pricePerToken: manuallyDecoded.pricePerTokenLamports.toNumber() / 1e9,
+              isActive: manuallyDecoded.isActive
+            })
+            
+            // Add to listings using manually decoded data
+            listings.push({
+              publicKey: saleListingPda,
+              account: manuallyDecoded
+            })
+          } catch (decodeError: any) {
+            console.error('[v0] Failed to manually decode:', decodeError.message)
+          }
         }
       }
     } catch (e) {
