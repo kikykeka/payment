@@ -47,18 +47,22 @@ export interface PurchaseRecord {
   annualYield: number
 }
 
-const STORAGE_KEY = 'solestate_purchases'
+function getStorageKey(walletAddress: string): string {
+  return `solestate_purchases_${walletAddress}`
+}
 
-function loadPurchases(): PurchaseRecord[] {
-  if (typeof window === 'undefined') return []
+function loadPurchases(walletAddress: string | null): PurchaseRecord[] {
+  if (typeof window === 'undefined' || !walletAddress) return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(getStorageKey(walletAddress))
     return raw ? (JSON.parse(raw) as PurchaseRecord[]) : []
   } catch { return [] }
 }
 
-function savePurchases(list: PurchaseRecord[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch { /* noop */ }
+function savePurchases(walletAddress: string, list: PurchaseRecord[]) {
+  try { 
+    localStorage.setItem(getStorageKey(walletAddress), JSON.stringify(list)) 
+  } catch { /* noop */ }
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -289,10 +293,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [balance, setBalance] = useState<number | null>(null)
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([])
 
-  // Load transaction history from localStorage
+  // Load transaction history from wallet-specific localStorage
   useEffect(() => {
-    setPurchases(loadPurchases())
-  }, [])
+    if (publicKey) {
+      setPurchases(loadPurchases(publicKey))
+    } else {
+      setPurchases([])
+    }
+  }, [publicKey])
 
   const refreshBalance = useCallback(async (addr: string) => {
     try {
@@ -419,7 +427,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
     setPurchases((prev) => {
       const next = [record, ...prev]
-      savePurchases(next)
+      if (publicKey) {
+        savePurchases(publicKey, next)
+      }
       return next
     })
 
