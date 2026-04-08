@@ -277,19 +277,29 @@ export async function fetchAllUserListings(wallet: any) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const seller = new PublicKey(wallet.publicKey.toString())
-
+  
+  console.log('[v0] Fetching listings for seller:', seller.toBase58())
+  
   // Fetch all SaleListing accounts where seller matches
   const listings = await (program.account as any).saleListing.all([
-    {
-      memcmp: {
-        offset: 8, // Discriminator
-        bytes: seller.toBase58(),
-      },
-    },
+  {
+  memcmp: {
+  offset: 8, // After discriminator, seller field starts
+  bytes: seller.toBase58(),
+  },
+  },
   ])
-
+  
+  console.log('[v0] Found listings count:', listings.length)
+  console.log('[v0] Listings data:', listings.map((l: any) => ({
+    seller: l.account.seller.toBase58(),
+    tokenMint: l.account.tokenMint.toBase58(),
+    tokenAmount: l.account.tokenAmount.toNumber(),
+    isActive: l.account.isActive
+  })))
+  
   return listings.map((l: any) => ({
-    publicKey: l.publicKey,
-    account: l.account,
+  publicKey: l.publicKey,
+  account: l.account,
   }))
-}
+  }

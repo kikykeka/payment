@@ -70,13 +70,18 @@ export default function PortfolioPage() {
   const [sellModalData, setSellModalData] = useState<{ isOpen: boolean, property: any, tokens: number } | null>(null)
 
   const refreshListings = async () => {
-    if (!connected || !publicKey) return
+    if (!connected || !publicKey) {
+      console.log('[v0] Cannot fetch listings - not connected or no publicKey')
+      return
+    }
+    console.log('[v0] Starting listings refresh for:', publicKey)
     setIsLoadingListings(true)
     try {
       const list = await fetchAllUserListings((window as any).phantom?.solana)
+      console.log('[v0] Fetched listings, setting state:', list.length, 'items')
       setActiveListings(list)
     } catch (e) {
-      console.error('Failed to fetch listings:', e)
+      console.error('[v0] Failed to fetch listings:', e)
     } finally {
       setIsLoadingListings(false)
     }
@@ -485,28 +490,35 @@ export default function PortfolioPage() {
                       <span className="text-sm font-medium tracking-wide">Querying SolEstate Market...</span>
                     </div>
                   ) : activeListings.length === 0 ? (
-                    <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                      <div className="w-16 h-16 rounded-3xl bg-white/[0.02] flex items-center justify-center mb-2 border border-white/5 shadow-inner">
-                        <Tag className="w-7 h-7 opacity-10" />
+                    <>
+                      {console.log('[v0] Rendering "No active listings" - activeListings:', activeListings)}
+                      <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="w-16 h-16 rounded-3xl bg-white/[0.02] flex items-center justify-center mb-2 border border-white/5 shadow-inner">
+                          <Tag className="w-7 h-7 opacity-10" />
+                        </div>
+                        <span className="text-sm font-semibold text-white/40">No active listings found</span>
+                        <p className="text-xs opacity-40 max-w-[200px] text-center leading-relaxed">Your P2P market listings will appear here once confirmed</p>
                       </div>
-                      <span className="text-sm font-semibold text-white/40">No active listings found</span>
-                      <p className="text-xs opacity-40 max-w-[200px] text-center leading-relaxed">Your P2P market listings will appear here once confirmed</p>
-                    </div>
+                    </>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="bg-white/[0.02] border-b border-white/5">
-                          <tr>
-                            <th className="px-6 py-4 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] w-[40%]">Investment</th>
-                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Quantity</th>
-                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">List Price</th>
-                            <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Est. Return</th>
-                            <th className="px-6 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Control</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeListings.map((listing, idx) => {
+                    <>
+                      {console.log('[v0] Rendering listings table - count:', activeListings.length)}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-white/[0.02] border-b border-white/5">
+                            <tr>
+                              <th className="px-6 py-4 text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] w-[40%]">Investment</th>
+                              <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Quantity</th>
+                              <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">List Price</th>
+                              <th className="px-4 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Est. Return</th>
+                              <th className="px-6 py-4 text-right text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Control</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeListings.map((listing, idx) => {
+                             console.log('[v0] Processing listing', idx, 'tokenMint:', listing.account.tokenMint.toBase58())
                              const property = PROPERTIES.find(p => p.tokenMint === listing.account.tokenMint.toBase58())
+                             console.log('[v0] Found property for listing:', property?.id, property?.name)
                              const tokens = listing.account.tokenAmount.toNumber()
                              const pricePerToken = listing.account.pricePerTokenLamports.toNumber() / 1e9
                              const total = (tokens * pricePerToken).toFixed(4)
