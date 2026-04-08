@@ -289,86 +289,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [balance, setBalance] = useState<number | null>(null)
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([])
 
-  // Load purchases from blockchain when wallet connects
+  // Load transaction history from localStorage
   useEffect(() => {
-    if (!publicKey) {
-      setPurchases([])
-      return
-    }
-    
-    // Load from blockchain based on token accounts
-    const loadPurchasesFromBlockchain = async () => {
-      try {
-        const userPubkey = new PublicKey(publicKey)
-        
-        // Import properties to check token ownership
-        const { properties } = await import('./properties')
-        const purchaseRecords: PurchaseRecord[] = []
-        
-        for (const property of properties) {
-          try {
-            const mintPk = new PublicKey(property.tokenMint)
-            const userTokenAccount = getAssociatedTokenAddressSync(
-              mintPk,
-              userPubkey,
-              false,
-              TOKEN_PROGRAM_ID,
-              ASSOCIATED_TOKEN_PROGRAM_ID
-            )
-            
-            // Check if user has tokens
-            const accountInfo = await connection.getAccountInfo(userTokenAccount)
-            if (accountInfo) {
-              // Get mint info to check decimals
-              const mintInfo = await connection.getAccountInfo(mintPk)
-              let decimals = 6 // Default to 6 decimals
-              
-              if (mintInfo && mintInfo.data.length >= 44) {
-                // Mint account structure: decimals is at byte 44
-                decimals = mintInfo.data[44]
-              }
-              
-              // Parse token account data to get amount
-              // Token account: 32 bytes mint + 32 bytes owner + 8 bytes amount + ...
-              const data = accountInfo.data
-              if (data.length >= 72) {
-                const rawAmount = Number(new BN(data.slice(64, 72), 'le'))
-                // Convert from raw amount to actual tokens by dividing by 10^decimals
-                const amount = rawAmount / Math.pow(10, decimals)
-                
-                if (amount > 0) {
-                  // Create a purchase record from token ownership
-                  purchaseRecords.push({
-                    id: `${property.id}-${Date.now()}`,
-                    propertyId: property.id,
-                    propertyName: property.name,
-                    propertyLocation: property.location,
-                    propertyImage: property.image,
-                    tokens: amount,
-                    pricePerToken: property.pricePerToken,
-                    totalSol: amount * property.pricePerToken,
-                    signature: 'from-blockchain',
-                    timestamp: Date.now(),
-                    annualYield: property.annualYield
-                  })
-                }
-              }
-            }
-          } catch (e) {
-            // Skip properties that user doesn't own
-          }
-        }
-        
-        setPurchases(purchaseRecords)
-      } catch (e) {
-        console.error('Failed to load purchases from blockchain:', e)
-        // Fallback to localStorage
-        setPurchases(loadPurchases())
-      }
-    }
-    
-    loadPurchasesFromBlockchain()
-  }, [publicKey])
+    setPurchases(loadPurchases())
+  }, [])
 
   const refreshBalance = useCallback(async (addr: string) => {
     try {
@@ -479,14 +403,28 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       })
       .rpc()
 
-    // 6. Refresh SOL balance and reload purchases from blockchain
+    // 6. Record purchase in local State
+    const record: PurchaseRecord = {
+      id: signature,
+      propertyId: params.propertyId,
+      propertyName: params.propertyName,
+      propertyLocation: params.propertyLocation,
+      propertyImage: params.propertyImage,
+      tokens: params.tokens,
+      pricePerToken: params.pricePerToken,
+      totalSol: params.lamports / 1e9,
+      signature,
+      timestamp: Date.now(),
+      annualYield: params.annualYield,
+    }
+    setPurchases((prev) => {
+      const next = [record, ...prev]
+      savePurchases(next)
+      return next
+    })
+
+    // 7. Refresh SOL balance
     refreshBalance(fromAddress.toBase58())
-    
-    // Trigger reload of purchases from blockchain after small delay
-    setTimeout(() => {
-      // Force re-trigger the useEffect by updating a dummy state
-      setPublicKey(fromAddress.toBase58())
-    }, 2000)
 
     return signature
   }, [refreshBalance])
