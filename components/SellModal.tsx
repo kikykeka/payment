@@ -105,7 +105,7 @@ export function SellModal({ isOpen, onClose, property, maxTokens, onSell }: Sell
                     }}
                     max={maxTokens}
                     min={1}
-                    className="w-full bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-white text-center focus:outline-none focus:border-primary/50 transition-colors"
+                    className="w-full bg-[#121214] border border-white/5 rounded-xl px-4 py-3 text-white text-center focus:outline-none focus:border-primary/50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
                 <button
