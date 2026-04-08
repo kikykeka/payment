@@ -280,17 +280,46 @@ export async function fetchAllUserListings(wallet: any) {
   
   console.log('[v0] Fetching listings for seller:', seller.toBase58())
   
-  // Fetch all SaleListing accounts (no filter - filter client-side)
-  const allListings = await (program.account as any).saleListing.all()
+  const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   
-  console.log('[v0] Total listings in program:', allListings.length)
+  // Import properties to check each one
+  const { properties } = await import('./properties')
   
-  // Filter for this seller's listings
-  const listings = allListings.filter((l: any) => 
-    l.account.seller.toBase58() === seller.toBase58()
-  )
+  const listings: any[] = []
   
-  console.log('[v0] Found listings count for this seller:', listings.length)
+  // Check each property to see if user has an active listing
+  for (const property of properties) {
+    try {
+      const [propertyPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(property.id)],
+        PROGRAM_ID
+      )
+      
+      const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+      const mintPk = propAccount.tokenMint as PublicKey
+      
+      const [saleListingPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
+        PROGRAM_ID
+      )
+      
+      // Try to fetch the listing account
+      try {
+        const listingAccount = await program.account.saleListing.fetch(saleListingPda)
+        console.log('[v0] Found listing for property:', property.id, listingAccount)
+        listings.push({
+          publicKey: saleListingPda,
+          account: listingAccount
+        })
+      } catch (e) {
+        // No listing exists for this property, that's fine
+      }
+    } catch (e) {
+      console.error('[v0] Error checking property:', property.id, e)
+    }
+  }
+  
+  console.log('[v0] Found total listings for this seller:', listings.length)
   console.log('[v0] Listings data:', listings.map((l: any) => ({
     seller: l.account.seller.toBase58(),
     tokenMint: l.account.tokenMint.toBase58(),
@@ -298,8 +327,5 @@ export async function fetchAllUserListings(wallet: any) {
     isActive: l.account.isActive
   })))
   
-  return listings.map((l: any) => ({
-  publicKey: l.publicKey,
-  account: l.account,
-  }))
+  return listings
   }
