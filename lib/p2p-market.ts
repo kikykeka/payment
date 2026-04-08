@@ -280,17 +280,17 @@ export async function fetchAllUserListings(wallet: any) {
   
   console.log('[v0] Fetching listings for seller:', seller.toBase58())
   
-  // Fetch all SaleListing accounts where seller matches
-  const listings = await (program.account as any).saleListing.all([
-  {
-  memcmp: {
-  offset: 8, // After discriminator, seller field starts
-  bytes: seller.toBase58(),
-  },
-  },
-  ])
+  // Fetch all SaleListing accounts (no filter - filter client-side)
+  const allListings = await (program.account as any).saleListing.all()
   
-  console.log('[v0] Found listings count:', listings.length)
+  console.log('[v0] Total listings in program:', allListings.length)
+  
+  // Filter for this seller's listings
+  const listings = allListings.filter((l: any) => 
+    l.account.seller.toBase58() === seller.toBase58()
+  )
+  
+  console.log('[v0] Found listings count for this seller:', listings.length)
   console.log('[v0] Listings data:', listings.map((l: any) => ({
     seller: l.account.seller.toBase58(),
     tokenMint: l.account.tokenMint.toBase58(),
