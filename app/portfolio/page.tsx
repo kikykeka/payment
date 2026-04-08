@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { properties as PROPERTIES } from '@/lib/properties'
 import Image from 'next/image'
+import { toast } from 'sonner'
 import {
   Wallet,
   TrendingUp,
@@ -115,8 +116,21 @@ export default function PortfolioPage() {
         map.set(p.propertyId, { name: p.propertyName, sol: p.totalSol, tokens: p.tokens })
       }
     }
+    
+    // Subtract tokens that are currently listed for sale
+    for (const listing of activeListings) {
+      const property = PROPERTIES.find(p => p.tokenMint === listing.account.tokenMint.toBase58())
+      if (property) {
+        const entry = map.get(property.id)
+        if (entry) {
+          const listedTokens = listing.account.tokenAmount.toNumber()
+          entry.tokens = Math.max(0, entry.tokens - listedTokens)
+        }
+      }
+    }
+    
     return Array.from(map.values()).sort((a, b) => b.sol - a.sol)
-  }, [purchases])
+  }, [purchases, activeListings])
 
   // ── Fake cumulative portfolio value chart ────────────────────────────────
   const growthChart = useMemo(() => {
@@ -424,10 +438,14 @@ export default function PortfolioPage() {
                                       try {
                                         const sig = await lockTokens(wallet, propertyId, tokens, duration)
                                         console.log('Tokens locked:', sig)
-                                        alert(`Successfully locked ${tokens} tokens for ${duration} days!`)
+                                        toast.success('Tokens locked successfully!', {
+                                          description: `${tokens} tokens locked for ${duration} days`
+                                        })
                                       } catch (e: any) {
                                         console.error(e)
-                                        alert('Error: ' + e.message)
+                                        toast.error('Failed to lock tokens', {
+                                          description: e.message
+                                        })
                                       }
                                     }}
                                     className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-white transition-colors"
@@ -520,10 +538,16 @@ export default function PortfolioPage() {
                                        try {
                                          if (property) {
                                            await cancelSaleListing(wallet, property.id)
-                                           refreshListings()
+                                           await refreshListings()
+                                           toast.success('Listing cancelled!', {
+                                             description: 'Your tokens have been returned to your wallet'
+                                           })
                                          }
-                                       } catch (e) {
+                                       } catch (e: any) {
                                          console.error(e)
+                                         toast.error('Failed to cancel listing', {
+                                           description: e.message
+                                         })
                                        }
                                      }}
                                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30"
@@ -621,9 +645,19 @@ export default function PortfolioPage() {
           onSell={async (amt, prc) => {
             const wallet = (window as any).phantom?.solana
             const priceLamports = Math.floor(prc * 1e9)
-            await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
-            refreshListings()
-            alert('Successfully listed for sale!')
+            try {
+              await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
+              await refreshListings()
+              toast.success('Successfully listed for sale!', {
+                description: `${amt} tokens listed at ${prc} SOL each`
+              })
+              setSellModalData(null)
+            } catch (e: any) {
+              toast.error('Failed to create listing', {
+                description: e.message
+              })
+              throw e
+            }
           }}
         />
       )}

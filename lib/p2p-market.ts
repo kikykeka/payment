@@ -11,6 +11,36 @@ function getProvider(wallet: any) {
   return new AnchorProvider(connection, wallet, { preflightCommitment: 'confirmed' })
 }
 
+export async function checkExistingListing(
+  wallet: any,
+  propertyId: string
+): Promise<boolean> {
+  try {
+    const provider = getProvider(wallet)
+    const program = new Program(IDL as any, provider)
+    const seller = new PublicKey(wallet.publicKey.toString())
+    const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
+    const [propertyPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
+      PROGRAM_ID
+    )
+
+    const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+    const mintPk = propAccount.tokenMint as PublicKey
+
+    const [saleListingPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
+      PROGRAM_ID
+    )
+
+    const existingAccount = await connection.getAccountInfo(saleListingPda)
+    return existingAccount !== null
+  } catch (e) {
+    console.error('Error checking existing listing:', e)
+    return false
+  }
+}
+
 export async function createSaleListing(
   wallet: any,
   propertyId: string,
@@ -41,10 +71,10 @@ export async function createSaleListing(
 
   const sellerTokenAccount = getAssociatedTokenAddressSync(mintPk, seller, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
   
-  // Check if listing already exists to prevent simulation error
+  // Check if listing already exists to provide better error message
   const existingAccount = await connection.getAccountInfo(saleListingPda)
   if (existingAccount) {
-    throw new Error('You already have an active listing for this property. Please cancel the existing listing before creating a new one.')
+    throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
   }
 
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))

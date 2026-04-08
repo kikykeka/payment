@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { X, Loader2, Coins, ArrowRight, Building2, ShieldCheck, AlertCircle } from 'lucide-react'
+import { X, Loader2, Coins, ArrowRight, Building2, ShieldCheck, AlertCircle, CheckCircle } from 'lucide-react'
 import Image from 'next/image'
 
 interface Property {
@@ -24,18 +24,23 @@ export function SellModal({ isOpen, onClose, property, maxTokens, onSell }: Sell
   const [price, setPrice] = useState<number>(0.01)
   const [isSelling, setIsSelling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
   if (!isOpen) return null
 
   const handleSell = async () => {
     setError(null)
+    setSuccess(false)
     if (amount <= 0 || amount > maxTokens) return setError('Invalid amount')
     if (price <= 0) return setError('Invalid price')
     
     setIsSelling(true)
     try {
       await onSell(amount, price)
-      onClose()
+      setSuccess(true)
+      setTimeout(() => {
+        onClose()
+      }, 1500)
     } catch (e: any) {
       console.error(e)
       setError(e.message || 'An unexpected error occurred')
@@ -134,6 +139,13 @@ export function SellModal({ isOpen, onClose, property, maxTokens, onSell }: Sell
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-start gap-2 animate-in slide-in-from-top-2 duration-200">
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
               <p className="text-xs text-red-400 leading-relaxed">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 flex items-start gap-2 animate-in slide-in-from-top-2 duration-200">
+              <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-green-400 leading-relaxed">Successfully listed for sale! Check Active Listings below.</p>
             </div>
           )}
 
