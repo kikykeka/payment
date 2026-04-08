@@ -11,6 +11,36 @@ function getProvider(wallet: any) {
   return new AnchorProvider(connection, wallet, { preflightCommitment: 'confirmed' })
 }
 
+export async function checkExistingListing(
+  wallet: any,
+  propertyId: string
+): Promise<boolean> {
+  try {
+    const provider = getProvider(wallet)
+    const program = new Program(IDL as any, provider)
+    const seller = new PublicKey(wallet.publicKey.toString())
+    const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
+    const [propertyPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(propertyId)],
+      PROGRAM_ID
+    )
+
+    const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+    const mintPk = propAccount.tokenMint as PublicKey
+
+    const [saleListingPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
+      PROGRAM_ID
+    )
+
+    const existingAccount = await connection.getAccountInfo(saleListingPda)
+    return existingAccount !== null
+  } catch (e) {
+    console.error('Error checking existing listing:', e)
+    return false
+  }
+}
+
 export async function createSaleListing(
   wallet: any,
   propertyId: string,
@@ -41,10 +71,28 @@ export async function createSaleListing(
 
   const sellerTokenAccount = getAssociatedTokenAddressSync(mintPk, seller, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
   
-  // Check if listing already exists to prevent simulation error
+  // Check if a listing account already exists
+  // The smart contract cannot create a listing if ANY account exists at this PDA
   const existingAccount = await connection.getAccountInfo(saleListingPda)
   if (existingAccount) {
-    throw new Error('You already have an active listing for this property. Please cancel the existing listing before creating a new one.')
+    // Check if it's active
+    let isActive = false
+    try {
+      const listing = await program.account.saleListing.fetch(saleListingPda)
+      isActive = listing.isActive
+    } catch (e: any) {
+      // If we can't decode with Anchor, manually check the isActive byte
+      if (existingAccount.data.length >= 113) { // 8 + 32 + 32 + 32 + 8 + 8 + 1
+        isActive = existingAccount.data[112] === 1
+      }
+    }
+    
+    if (isActive) {
+      throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
+    } else {
+      // Account exists but is inactive - can't create new listing
+      throw new Error('Cannot create a new listing. A previous cancelled listing account still exists for this property. Please try again later or contact support.')
+    }
   }
 
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
@@ -247,19 +295,99 @@ export async function fetchAllUserListings(wallet: any) {
   const provider = getProvider(wallet)
   const program = new Program(IDL as any, provider)
   const seller = new PublicKey(wallet.publicKey.toString())
-
-  // Fetch all SaleListing accounts where seller matches
-  const listings = await (program.account as any).saleListing.all([
-    {
-      memcmp: {
-        offset: 8, // Discriminator
-        bytes: seller.toBase58(),
-      },
-    },
-  ])
-
-  return listings.map((l: any) => ({
-    publicKey: l.publicKey,
-    account: l.account,
-  }))
-}
+  
+  const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
+  
+  // Import properties to check each one
+  const { properties } = await import('./properties')
+  
+  const listings: any[] = []
+  
+  // Check each property to see if user has an active listing
+  for (const property of properties) {
+    try {
+      const [propertyPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(property.id)],
+        PROGRAM_ID
+      )
+      
+      const propAccount = await (program.account as any).propertyState.fetch(propertyPda)
+      const mintPk = propAccount.tokenMint as PublicKey
+      
+      const [saleListingPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("sale_listing"), seller.toBuffer(), propertyPda.toBuffer(), mintPk.toBuffer()],
+        PROGRAM_ID
+      )
+      
+      // Try to fetch the listing account using raw getAccountInfo first
+      const accountInfo = await connection.getAccountInfo(saleListingPda)
+      
+      if (accountInfo) {
+        try {
+          const listingAccount = await program.account.saleListing.fetch(saleListingPda)
+          // Only add if listing is active
+          if (listingAccount.isActive) {
+            listings.push({
+              publicKey: saleListingPda,
+              account: listingAccount
+            })
+          }
+        } catch (e: any) {
+          // Account exists but can't be decoded - manually decode
+          try {
+            // Manually parse the account data
+            let offset = 8 // Skip discriminator
+            
+            // seller: PublicKey (32 bytes)
+            const sellerBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // property: PublicKey (32 bytes)  
+            const propertyBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // tokenMint: PublicKey (32 bytes)
+            const tokenMintBytes = accountInfo.data.slice(offset, offset + 32)
+            offset += 32
+            
+            // tokenAmount: u64 (8 bytes)
+            const tokenAmountBytes = accountInfo.data.slice(offset, offset + 8)
+            const tokenAmount = new BN(tokenAmountBytes, 'le')
+            offset += 8
+            
+            // pricePerTokenLamports: u64 (8 bytes)
+            const priceBytes = accountInfo.data.slice(offset, offset + 8)
+            const pricePerTokenLamports = new BN(priceBytes, 'le')
+            offset += 8
+            
+            // isActive: bool (1 byte)
+            const isActive = accountInfo.data[offset] === 1
+            
+            // Only add active listings
+            if (isActive) {
+              const manuallyDecoded = {
+                seller: new PublicKey(sellerBytes),
+                property: new PublicKey(propertyBytes),
+                tokenMint: new PublicKey(tokenMintBytes),
+                tokenAmount,
+                pricePerTokenLamports,
+                isActive
+              }
+              
+              listings.push({
+                publicKey: saleListingPda,
+                account: manuallyDecoded
+              })
+            }
+          } catch (decodeError) {
+            // Skip this listing if we can't decode it
+          }
+        }
+      }
+    } catch (e) {
+      // Skip properties that don't exist or have errors
+    }
+  }
+  
+  return listings
+  }

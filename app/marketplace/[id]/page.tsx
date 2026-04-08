@@ -4,6 +4,7 @@ import { use, useState, useCallback, useMemo } from 'react'
 import { useWallet } from '@/lib/wallet-context'
 import Image from 'next/image'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   MapPin,
@@ -534,12 +535,21 @@ export default function PropertyDetailPage({ params }: PageProps) {
           tokenMint: '' // Handled by library
         }}
         maxTokens={userHoldings}
-        onSell={async (amt, prc) => {
-          const wallet = (window as any).phantom?.solana
-          const priceLamports = Math.floor(prc * 1e9)
-          await createSaleListing(wallet, property.id, amt, priceLamports)
-          alert('Successfully listed for sale!')
-        }}
+ onSell={async (amt, prc) => {
+  const wallet = (window as any).phantom?.solana
+  const priceLamports = Math.floor(prc * 1e9)
+  try {
+    await createSaleListing(wallet, property.id, amt, priceLamports)
+    toast.success('Successfully listed for sale!', {
+      description: `${amt} tokens listed at ${prc} SOL each. View in Portfolio > Active Listings`
+    })
+  } catch (e: any) {
+    toast.error('Failed to create listing', {
+      description: e.message
+    })
+    throw e
+  }
+  }}
       />
     </div>
   )
