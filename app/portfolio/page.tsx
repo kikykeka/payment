@@ -511,15 +511,18 @@ export default function PortfolioPage() {
                              const pricePerToken = listing.account.pricePerTokenLamports.toNumber() / 1e9
                              const total = (tokens * pricePerToken).toFixed(4)
 
+                             // Skip if property not found
+                             if (!property) return null
+
                              return (
                                <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.01] transition-all group">
                                  <td className="px-6 py-5">
                                    <div className="flex items-center gap-4">
                                       <div className="w-10 h-10 rounded-xl overflow-hidden relative border border-white/10 shadow-lg shrink-0">
-                                        <Image src={property?.image ?? ''} alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        <Image src={property.image} alt={property.name} fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
                                       </div>
                                       <div className="min-w-0">
-                                        <p className="text-sm font-bold text-white truncate">{property?.name ?? 'Unknown Asset'}</p>
+                                        <p className="text-sm font-bold text-white truncate">{property.name}</p>
                                         <div className="flex items-center gap-1.5 mt-1">
                                           <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                                           <span className="text-[10px] text-accent font-mono tracking-wider">LISTED ON SECONDARY</span>
@@ -538,10 +541,13 @@ export default function PortfolioPage() {
                                        try {
                                          if (property) {
                                            await cancelSaleListing(wallet, property.id)
-                                           await refreshListings()
                                            toast.success('Listing cancelled!', {
                                              description: 'Your tokens have been returned to your wallet'
                                            })
+                                           // Wait a bit for blockchain to process, then refresh
+                                           setTimeout(async () => {
+                                             await refreshListings()
+                                           }, 1500)
                                          }
                                        } catch (e: any) {
                                          console.error(e)
@@ -647,11 +653,14 @@ export default function PortfolioPage() {
             const priceLamports = Math.floor(prc * 1e9)
             try {
               await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
-              await refreshListings()
               toast.success('Successfully listed for sale!', {
-                description: `${amt} tokens listed at ${prc} SOL each`
+                description: `${amt} tokens listed at ${prc} SOL each. Check Active Listings below.`
               })
               setSellModalData(null)
+              // Wait a bit for blockchain to process, then refresh
+              setTimeout(async () => {
+                await refreshListings()
+              }, 1500)
             } catch (e: any) {
               toast.error('Failed to create listing', {
                 description: e.message
