@@ -278,8 +278,6 @@ export async function fetchAllUserListings(wallet: any) {
   const program = new Program(IDL as any, provider)
   const seller = new PublicKey(wallet.publicKey.toString())
   
-  console.log('[v0] Fetching listings for seller:', seller.toBase58())
-  
   const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
   
   // Import properties to check each one
@@ -305,25 +303,16 @@ export async function fetchAllUserListings(wallet: any) {
       
       // Try to fetch the listing account using raw getAccountInfo first
       const accountInfo = await connection.getAccountInfo(saleListingPda)
-      console.log('[v0] Account info for', property.id, ':', accountInfo ? 'EXISTS' : 'NULL')
       
       if (accountInfo) {
         try {
           const listingAccount = await program.account.saleListing.fetch(saleListingPda)
-          console.log('[v0] Found listing for property:', property.id, listingAccount)
           listings.push({
             publicKey: saleListingPda,
             account: listingAccount
           })
         } catch (e: any) {
-          console.error('[v0] Error fetching listing account for', property.id, ':', e.message)
-          // Account exists but can't be decoded - log discriminator
-          const discriminator = accountInfo.data.slice(0, 8)
-          console.log('[v0] Raw account owner:', accountInfo.owner.toBase58())
-          console.log('[v0] Raw account data length:', accountInfo.data.length)
-          console.log('[v0] Account discriminator (first 8 bytes):', Array.from(discriminator))
-          
-          // Try to manually decode the account
+          // Account exists but can't be decoded - manually decode
           try {
             // Manually parse the account data
             let offset = 8 // Skip discriminator
@@ -362,36 +351,20 @@ export async function fetchAllUserListings(wallet: any) {
               isActive
             }
             
-            console.log('[v0] Manually decoded listing:', {
-              seller: manuallyDecoded.seller.toBase58(),
-              tokenMint: manuallyDecoded.tokenMint.toBase58(),
-              tokenAmount: manuallyDecoded.tokenAmount.toNumber(),
-              pricePerToken: manuallyDecoded.pricePerTokenLamports.toNumber() / 1e9,
-              isActive: manuallyDecoded.isActive
-            })
-            
             // Add to listings using manually decoded data
             listings.push({
               publicKey: saleListingPda,
               account: manuallyDecoded
             })
-          } catch (decodeError: any) {
-            console.error('[v0] Failed to manually decode:', decodeError.message)
+          } catch (decodeError) {
+            // Skip this listing if we can't decode it
           }
         }
       }
     } catch (e) {
-      console.error('[v0] Error checking property:', property.id, e)
+      // Skip properties that don't exist or have errors
     }
   }
-  
-  console.log('[v0] Found total listings for this seller:', listings.length)
-  console.log('[v0] Listings data:', listings.map((l: any) => ({
-    seller: l.account.seller.toBase58(),
-    tokenMint: l.account.tokenMint.toBase58(),
-    tokenAmount: l.account.tokenAmount.toNumber(),
-    isActive: l.account.isActive
-  })))
   
   return listings
   }
