@@ -69,6 +69,8 @@ export default function PortfolioPage() {
   const [isLoadingListings, setIsLoadingListings] = useState(false)
   const [sellModalData, setSellModalData] = useState<{ isOpen: boolean, property: any, tokens: number } | null>(null)
   const [cancelConfirmModal, setCancelConfirmModal] = useState<{ isOpen: boolean, property: any, listingIndex: number } | null>(null)
+  const [transactionPage, setTransactionPage] = useState(1)
+  const transactionsPerPage = 5
 
   const refreshListings = async () => {
     if (!connected || !publicKey) return
@@ -562,14 +564,16 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              {/* ── Transaction history ────────────────��─────���───────────── */}
+              {/* ── Transaction history ────────────────��──��──���───────────── */}
               <div className="glass rounded-2xl border-glow overflow-hidden">
                 <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                   <h2 className="text-base font-semibold text-foreground">Transaction History</h2>
                   <span className="text-xs text-muted-foreground">{purchases.length} transactions</span>
                 </div>
                 <div className="divide-y divide-border/50">
-                  {purchases.map((p: any) => (
+                  {purchases
+                    .slice((transactionPage - 1) * transactionsPerPage, transactionPage * transactionsPerPage)
+                    .map((p: any) => (
                     <div key={p.id} className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/20 transition-colors">
                       {/* Property thumbnail */}
                       <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0">
@@ -610,6 +614,29 @@ export default function PortfolioPage() {
                     </div>
                   ))}
                 </div>
+                
+                {/* Pagination */}
+                {purchases.length > transactionsPerPage && (
+                  <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+                    <button
+                      onClick={() => setTransactionPage(prev => Math.max(1, prev - 1))}
+                      disabled={transactionPage === 1}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {transactionPage} of {Math.ceil(purchases.length / transactionsPerPage)}
+                    </span>
+                    <button
+                      onClick={() => setTransactionPage(prev => Math.min(Math.ceil(purchases.length / transactionsPerPage), prev + 1))}
+                      disabled={transactionPage >= Math.ceil(purchases.length / transactionsPerPage)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 text-white/60 hover:bg-white/10 hover:text-white transition-all border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* ── Explore more CTA ─────────────────────────────────────── */}
