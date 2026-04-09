@@ -755,10 +755,18 @@ export default function PortfolioPage() {
                   const property = cancelConfirmModal.property
                   try {
                     if (property) {
-                      await cancelSaleListing(wallet, property.id)
-                      toast.success('Listing cancelled!', {
-                        description: 'Your tokens have been returned to your wallet'
-                      })
+                      const result = await cancelSaleListing(wallet, property.id)
+                      
+                      if (result === 'success_with_error') {
+                        toast.success('Listing cancelled!', {
+                          description: 'Your tokens have been returned. Note: Due to a smart contract limitation, the listing account remains on-chain but is now inactive.'
+                        })
+                      } else {
+                        toast.success('Listing cancelled!', {
+                          description: 'Your tokens have been returned to your wallet'
+                        })
+                      }
+                      
                       setCancelConfirmModal(null)
                       // Wait for blockchain to process, then refresh
                       setTimeout(async () => {
@@ -767,17 +775,9 @@ export default function PortfolioPage() {
                     }
                   } catch (e: any) {
                     console.error('[v0] Cancel listing error:', e)
-                    const errorMsg = e.message || e.toString()
-                    
-                    if (errorMsg.includes('ExternalAccountLamportSpend') || errorMsg.includes('instruction spent from the balance')) {
-                      toast.error('Smart Contract Limitation', {
-                        description: 'The current smart contract has a bug preventing proper cancellation. Please contact support to upgrade to the new contract version that fixes this issue.'
-                      })
-                    } else {
-                      toast.error('Failed to cancel listing', {
-                        description: errorMsg
-                      })
-                    }
+                    toast.error('Failed to cancel listing', {
+                      description: e.message || 'Please try again'
+                    })
                   }
                 }}
                 className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30"
