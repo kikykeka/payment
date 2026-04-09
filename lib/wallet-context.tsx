@@ -399,13 +399,39 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   // Re-attach on mount if already approved
   useEffect(() => {
-    const p = getSolanaProvider()
-    if (p?.isConnected && p.publicKey) {
-      const addr = p.publicKey.toString()
-      setPublicKey(addr)
-      setConnected(true)
-      refreshBalance(addr)
+    const autoConnect = async () => {
+      const p = getSolanaProvider()
+      if (!p) return
+
+      // Check if user previously connected (stored in localStorage)
+      const wasConnected = typeof window !== 'undefined' && localStorage.getItem('solestateWalletConnected') === 'true'
+      
+      if (wasConnected) {
+        try {
+          // Silently reconnect without showing approval popup
+          await p.connect({ onlyIfTrusted: true } as any)
+        } catch (err) {
+          // If silent connect fails, clear the flag
+          console.log('[v0] Silent reconnect failed:', err)
+          localStorage.removeItem('solestateWalletConnected')
+          return
+        }
+      }
+
+      // If wallet is already connected, set state
+      if (p.isConnected && p.publicKey) {
+        const addr = p.publicKey.toString()
+        setPublicKey(addr)
+        setConnected(true)
+        refreshBalance(addr)
+        // Ensure flag is set
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('solestateWalletConnected', 'true')
+        }
+      }
     }
+
+    autoConnect()
   }, [refreshBalance])
 
   const connect = useCallback(async () => {
@@ -418,6 +444,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setPublicKey(addr)
       setConnected(true)
       refreshBalance(addr)
+      // Save connection state to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('solestateWalletConnected', 'true')
+      }
     } catch (err) {
       const code = (err as { code?: number })?.code
       if (code !== 4001) console.error('[SolEstate] Wallet connect error:', err)
@@ -431,6 +461,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setConnected(false)
     setPublicKey(null)
     setBalance(null)
+    // Clear connection state from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('solestateWalletConnected')
+    }
   }, [])
 
   const sendPurchaseTx = useCallback(async (params: {
