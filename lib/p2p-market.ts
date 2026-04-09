@@ -150,6 +150,7 @@ export async function cancelSaleListing(
       seller,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
+      rent: SYSVAR_RENT_PUBKEY,
     })
     .rpc()
 }
