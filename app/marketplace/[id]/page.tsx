@@ -177,38 +177,38 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Property stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {property.bedrooms && (
-                  <div className="glass rounded-xl p-4 border-glow">
-                    <Home className="w-4 h-4 text-muted-foreground mb-2" />
-                    <p className="text-lg font-semibold text-foreground">{property.bedrooms}</p>
-                    <p className="text-xs text-muted-foreground">Bedrooms</p>
-                  </div>
-                )}
-                {property.bathrooms && (
-                  <div className="glass rounded-xl p-4 border-glow">
-                    <Bath className="w-4 h-4 text-muted-foreground mb-2" />
-                    <p className="text-lg font-semibold text-foreground">{property.bathrooms}</p>
-                    <p className="text-xs text-muted-foreground">Bathrooms</p>
-                  </div>
-                )}
-                <div className="glass rounded-xl p-4 border-glow">
-                  <Maximize2 className="w-4 h-4 text-muted-foreground mb-2" />
-                  <p className="text-lg font-semibold text-foreground">{formatNum(property.sqft)}</p>
-                  <p className="text-xs text-muted-foreground">Sq. ft.</p>
-                </div>
-                <div className="glass rounded-xl p-4 border-glow">
-                  <Calendar className="w-4 h-4 text-muted-foreground mb-2" />
-                  <p className="text-lg font-semibold text-foreground">{property.yearBuilt}</p>
-                  <p className="text-xs text-muted-foreground">Year Built</p>
-                </div>
-              </div>
-
               {/* Description */}
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-3">About this property</h2>
-                <p className="text-muted-foreground leading-relaxed">{property.description}</p>
+                <p className="text-muted-foreground leading-relaxed mb-6">{property.description}</p>
+                
+                {/* Property stats moved here for better alignment with sidebar */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {property.bedrooms && (
+                    <div className="glass rounded-xl p-4 border-glow">
+                      <Home className="w-4 h-4 text-muted-foreground mb-2" />
+                      <p className="text-lg font-semibold text-foreground">{property.bedrooms}</p>
+                      <p className="text-xs text-muted-foreground">Bedrooms</p>
+                    </div>
+                  )}
+                  {property.bathrooms && (
+                    <div className="glass rounded-xl p-4 border-glow">
+                      <Bath className="w-4 h-4 text-muted-foreground mb-2" />
+                      <p className="text-lg font-semibold text-foreground">{property.bathrooms}</p>
+                      <p className="text-xs text-muted-foreground">Bathrooms</p>
+                    </div>
+                  )}
+                  <div className="glass rounded-xl p-4 border-glow">
+                    <Maximize2 className="w-4 h-4 text-muted-foreground mb-2" />
+                    <p className="text-lg font-semibold text-foreground">{formatNum(property.sqft)}</p>
+                    <p className="text-xs text-muted-foreground">Sq. ft.</p>
+                  </div>
+                  <div className="glass rounded-xl p-4 border-glow">
+                    <Calendar className="w-4 h-4 text-muted-foreground mb-2" />
+                    <p className="text-lg font-semibold text-foreground">{property.yearBuilt}</p>
+                    <p className="text-xs text-muted-foreground">Year Built</p>
+                  </div>
+                </div>
               </div>
 
               {/* Highlights */}
