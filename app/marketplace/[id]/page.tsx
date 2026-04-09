@@ -168,47 +168,47 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Title & Info Header */}
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-foreground mb-2">{property.name}</h1>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    <span>{property.location}, {property.country}</span>
-                  </div>
-                </div>
-
-                {/* Refined Spec Bar */}
-                <div className="flex flex-wrap items-center gap-6 py-4 border-y border-white/5">
-                  {property.bedrooms && (
-                    <div className="flex items-center gap-2">
-                      <Home className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">{property.bedrooms} <span className="text-muted-foreground font-normal">Beds</span></span>
-                    </div>
-                  )}
-                  {property.bathrooms && (
-                    <div className="flex items-center gap-2">
-                      <Bath className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">{property.bathrooms} <span className="text-muted-foreground font-normal">Baths</span></span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <Maximize2 className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">{formatNum(property.sqft)} <span className="text-muted-foreground font-normal">Sq. ft.</span></span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">{property.yearBuilt} <span className="text-muted-foreground font-normal">Year Built</span></span>
-                  </div>
+              {/* Title & location */}
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">{property.name}</h1>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <MapPin className="w-4 h-4" />
+                  <span>{property.location}, {property.country}</span>
                 </div>
               </div>
 
-              {/* Description Section - Now Aligned with Sidebar Summary */}
+              {/* Property stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {property.bedrooms && (
+                  <div className="glass rounded-xl p-4 border-glow">
+                    <Home className="w-4 h-4 text-muted-foreground mb-2" />
+                    <p className="text-lg font-semibold text-foreground">{property.bedrooms}</p>
+                    <p className="text-xs text-muted-foreground">Bedrooms</p>
+                  </div>
+                )}
+                {property.bathrooms && (
+                  <div className="glass rounded-xl p-4 border-glow">
+                    <Bath className="w-4 h-4 text-muted-foreground mb-2" />
+                    <p className="text-lg font-semibold text-foreground">{property.bathrooms}</p>
+                    <p className="text-xs text-muted-foreground">Bathrooms</p>
+                  </div>
+                )}
+                <div className="glass rounded-xl p-4 border-glow">
+                  <Maximize2 className="w-4 h-4 text-muted-foreground mb-2" />
+                  <p className="text-lg font-semibold text-foreground">{formatNum(property.sqft)}</p>
+                  <p className="text-xs text-muted-foreground">Sq. ft.</p>
+                </div>
+                <div className="glass rounded-xl p-4 border-glow">
+                  <Calendar className="w-4 h-4 text-muted-foreground mb-2" />
+                  <p className="text-lg font-semibold text-foreground">{property.yearBuilt}</p>
+                  <p className="text-xs text-muted-foreground">Year Built</p>
+                </div>
+              </div>
+
+              {/* Description */}
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-3">About this property</h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  {property.description}
-                </p>
+                <p className="text-muted-foreground leading-relaxed">{property.description}</p>
               </div>
 
               {/* Highlights */}
@@ -256,69 +256,31 @@ export default function PropertyDetailPage({ params }: PageProps) {
 
             </div>
 
-            {/* Right: Sidebar content grouped by module */}
-            <div className="lg:col-span-1 border-l border-white/5 pl-8 -ml-4">
-              <div className="space-y-6">
-                
-                {/* 1. Primary Data: Financial Summary */}
-                <div className="glass rounded-2xl p-6 border-glow shadow-2xl">
-                  <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wider opacity-70">Financial Summary</h3>
-                  <div className="space-y-4">
-                    {[
-                      { label: 'Target Raise', value: formatUSD(property.targetRaise) },
-                      { label: 'Min. Investment', value: formatSOL(property.minInvestment) },
-                      { label: 'Yield Projection', value: `+${property.annualYield}% p.a.` },
-                      { label: 'Property Class', value: property.type.charAt(0).toUpperCase() + property.type.slice(1) },
-                    ].map((item) => (
-                      <div key={item.label} className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">{item.label}</span>
-                        <span className="text-sm text-foreground font-semibold">{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. Secondary Data: Token Specifics */}
+            {/* Right: investment panel (sticky) */}
+            <div className="lg:col-span-1">
+              <div className="space-y-4">
+                {/* Investment card */}
                 <div className="glass rounded-2xl p-6 border-glow">
-                  <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wider opacity-70">Token Assets</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Asset Pointer</span>
-                      <a
-                        href={`https://solscan.io/token/${property.tokenMint}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 font-mono text-xs text-primary hover:text-primary-foreground transition-colors"
-                      >
-                        {property.tokenMint.slice(0, 4)}...{property.tokenMint.slice(-4)}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Protocol</span>
-                      <span className="text-foreground font-medium">Solana SPL</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Emission</span>
-                      <span className="text-foreground font-medium">{formatNum(property.totalTokens)} Units</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Global Action: Investment Interface */}
-                <div className="glass rounded-3xl p-6 border-accent/20 bg-accent/5 shadow-purple">
-                  {/* Key metrics grid */}
+                  {/* Key metrics */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="p-3 rounded-2xl bg-black/20">
-                      <p className="text-[10px] uppercase tracking-tighter text-muted-foreground mb-1">Annual Yield</p>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Annual Yield</p>
                       <div className="flex items-center gap-1">
-                        <TrendingUp className="w-3.5 h-3.5 text-accent" />
-                        <span className="text-xl font-bold text-accent">{property.annualYield}%</span>
+                        <TrendingUp className="w-4 h-4 text-accent" />
+                        <span className="text-2xl font-bold text-accent">{property.annualYield}%</span>
                       </div>
                     </div>
-                    <div className="p-3 rounded-2xl bg-black/20">
-                      <p className="text-[10px] uppercase tracking-tighter text-muted-foreground mb-1">Token Price</p>
-                      <p className="text-xl font-bold text-foreground">{formatSOL(property.pricePerToken)}</p>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Per Token</p>
+                      <p className="text-2xl font-bold text-foreground">{formatSOL(property.pricePerToken)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Monthly Rent</p>
+                      <p className="text-base font-semibold text-foreground">{formatUSD(property.monthlyRent)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Occupancy</p>
+                      <p className="text-base font-semibold text-foreground">{property.occupancyRate}%</p>
                     </div>
                   </div>
 
@@ -499,6 +461,54 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   </div>
                 </div>
 
+                {/* Quick stats */}
+                <div className="glass rounded-2xl p-6 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Financial Summary</h3>
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Target Raise', value: formatUSD(property.targetRaise) },
+                      { label: 'Min. Investment', value: formatSOL(property.minInvestment) },
+                      { label: 'Appreciation Target', value: `+${property.appreciationTarget}% p.a.` },
+                      { label: 'Property Type', value: property.type.charAt(0).toUpperCase() + property.type.slice(1) },
+                    ].map((item) => (
+                      <div key={item.label} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{item.label}</span>
+                        <span className="text-foreground font-medium">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Token info */}
+                <div className="glass rounded-2xl p-6 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Token Information</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Token Mint</span>
+                      <a
+                        href={`https://solscan.io/token/${property.tokenMint}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 font-mono text-xs text-primary hover:underline"
+                      >
+                        {property.tokenMint.slice(0, 4)}...{property.tokenMint.slice(-4)}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Network</span>
+                      <span className="text-foreground font-medium">Devnet</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Standard</span>
+                      <span className="text-foreground font-medium">SPL</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Total Supply</span>
+                      <span className="text-foreground font-medium">{formatNum(property.totalTokens)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
