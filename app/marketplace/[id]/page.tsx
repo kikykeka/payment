@@ -254,36 +254,6 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              {/* Token info */}
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-3">Token Information</h2>
-                <div className="glass rounded-2xl p-6 border-glow space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Token Mint Address</span>
-                    <a
-                      href={`https://solscan.io/token/${property.tokenMint}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-                    >
-                      {property.tokenMint.slice(0, 8)}...{property.tokenMint.slice(-6)}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Network</span>
-                    <span className="text-foreground">Solana Devnet</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Token Standard</span>
-                    <span className="text-foreground">SPL Token</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total Supply</span>
-                    <span className="text-foreground">{formatNum(property.totalTokens)} tokens</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Right: investment panel (sticky) */}
@@ -506,6 +476,37 @@ export default function PropertyDetailPage({ params }: PageProps) {
                         <span className="text-foreground font-medium">{item.value}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Token info */}
+                <div className="glass rounded-2xl p-5 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-3">Token Information</h3>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Token Mint</span>
+                      <a
+                        href={`https://solscan.io/token/${property.tokenMint}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+                      >
+                        {property.tokenMint.slice(0, 4)}...{property.tokenMint.slice(-4)}
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Network</span>
+                      <span className="text-foreground font-medium">Devnet</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Standard</span>
+                      <span className="text-foreground font-medium">SPL</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Total Supply</span>
+                      <span className="text-foreground font-medium">{formatNum(property.totalTokens)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
