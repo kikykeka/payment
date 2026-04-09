@@ -5,7 +5,7 @@ import { IDL } from './wallet-context'
 
 const DEVNET = 'https://api.devnet.solana.com'
 const connection = new Connection(DEVNET, 'confirmed')
-const PROGRAM_ID = new PublicKey("5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN")
+const PROGRAM_ID = new PublicKey("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM")
 
 function getProvider(wallet: any) {
   return new AnchorProvider(connection, wallet, { preflightCommitment: 'confirmed' })
@@ -78,7 +78,7 @@ export async function createSaleListing(
     // Check if it's active
     let isActive = false
     try {
-      const listing = await program.account.saleListing.fetch(saleListingPda)
+      const listing = await (program.account as any).saleListing.fetch(saleListingPda)
       isActive = listing.isActive
     } catch (e: any) {
       // If we can't decode with Anchor, manually check the isActive byte
@@ -90,8 +90,8 @@ export async function createSaleListing(
     if (isActive) {
       throw new Error('You already have an active listing for this property. Please cancel it first in the "Active Listings" section below.')
     } else {
-      // Account exists but is inactive - can't create new listing
-      throw new Error('Cannot create a new listing. A previous cancelled listing account still exists for this property. Please try again later or contact support.')
+      // Account exists but is inactive - propose cleanup
+      throw new Error('A stale listing record exists for this property. Please click "Cancel" on this property in your Active Listings first to clean it up (you will receive a small SOL refund), then you can list it again.')
     }
   }
 
@@ -324,14 +324,12 @@ export async function fetchAllUserListings(wallet: any) {
       
       if (accountInfo) {
         try {
-          const listingAccount = await program.account.saleListing.fetch(saleListingPda)
-          // Only add if listing is active
-          if (listingAccount.isActive) {
-            listings.push({
-              publicKey: saleListingPda,
-              account: listingAccount
-            })
-          }
+          const listingAccount = await (program.account as any).saleListing.fetch(saleListingPda)
+          // Add both active and inactive accounts (inactive ones need cleanup)
+          listings.push({
+            publicKey: saleListingPda,
+            account: listingAccount
+          })
         } catch (e: any) {
           // Account exists but can't be decoded - manually decode
           try {
@@ -363,22 +361,20 @@ export async function fetchAllUserListings(wallet: any) {
             // isActive: bool (1 byte)
             const isActive = accountInfo.data[offset] === 1
             
-            // Only add active listings
-            if (isActive) {
-              const manuallyDecoded = {
-                seller: new PublicKey(sellerBytes),
-                property: new PublicKey(propertyBytes),
-                tokenMint: new PublicKey(tokenMintBytes),
-                tokenAmount,
-                pricePerTokenLamports,
-                isActive
-              }
-              
-              listings.push({
-                publicKey: saleListingPda,
-                account: manuallyDecoded
-              })
+            // Add both active and inactive accounts
+            const manuallyDecoded = {
+              seller: new PublicKey(sellerBytes),
+              property: new PublicKey(propertyBytes),
+              tokenMint: new PublicKey(tokenMintBytes),
+              tokenAmount,
+              pricePerTokenLamports,
+              isActive
             }
+            
+            listings.push({
+              publicKey: saleListingPda,
+              account: manuallyDecoded
+            })
           } catch (decodeError) {
             // Skip this listing if we can't decode it
           }

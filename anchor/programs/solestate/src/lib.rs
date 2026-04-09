@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 use anchor_spl::metadata::{create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata, mpl_token_metadata::types::DataV2};
 
-declare_id!("5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN");
+declare_id!("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM");
 
 // ── Platform constants (outside program module) ──────────────────────────
 // 2% platform fee on all P2P secondary market sales
@@ -177,6 +177,107 @@ pub mod solestate {
             ctx.accounts.investor.key(),
         );
 
+        Ok(())
+    }
+
+    /// Purchase tokens and create a permanent on-chain purchase record.
+    pub fn purchase_tokens_with_history(
+        ctx: Context<PurchaseTokensWithHistory>,
+        property_id: String,
+        token_amount: u64,
+        timestamp: i64,
+    ) -> Result<()> {
+        // 1. Perform standard purchase validation
+        require!(ctx.accounts.property.is_active, SolEstateError::PropertyNotActive);
+        require!(token_amount > 0, SolEstateError::InvalidTokenCount);
+        require!(
+            ctx.accounts.property.sold_tokens + token_amount <= ctx.accounts.property.total_tokens,
+            SolEstateError::InsufficientTokensAvailable
+        );
+
+        let cost_lamports = ctx.accounts.property
+            .price_per_token_lamports
+            .checked_mul(token_amount)
+            .ok_or(SolEstateError::ArithmeticOverflow)?;
+
+        // Transfer SOL: buyer → property vault
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.buyer.key(),
+            &ctx.accounts.property_vault.key(),
+            cost_lamports,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.buyer.to_account_info(),
+                ctx.accounts.property_vault.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        // Mint tokens to buyer
+        let registry_key = ctx.accounts.registry.key();
+        let prop_id = ctx.accounts.property.id.clone();
+        let property_bump = ctx.accounts.property.bump;
+        let seeds = &[
+            b"property",
+            registry_key.as_ref(),
+            prop_id.as_bytes(),
+            &[property_bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        token::mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.buyer_token_account.to_account_info(),
+                    authority: ctx.accounts.property.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            token_amount.checked_mul(1_000_000).ok_or(SolEstateError::ArithmeticOverflow)?,
+        )?;
+
+        // Update state
+        let property = &mut ctx.accounts.property;
+        property.sold_tokens += token_amount;
+        property.total_raised_lamports += cost_lamports;
+        property.investor_count += 1;
+        if property.sold_tokens == property.total_tokens {
+            property.is_active = false;
+        }
+
+        ctx.accounts.registry.total_raised_lamports += cost_lamports;
+
+        // 2. Initialize PurchaseRecord PDA
+        let record = &mut ctx.accounts.purchase_record;
+        record.buyer           = ctx.accounts.buyer.key();
+        record.property        = ctx.accounts.property.key();
+        record.property_id     = property_id;
+        record.token_mint      = ctx.accounts.token_mint.key();
+        record.token_amount    = token_amount;
+        record.price_per_token = ctx.accounts.property.price_per_token_lamports;
+        record.total_price     = cost_lamports;
+        record.timestamp       = timestamp;
+        record.annual_yield    = ctx.accounts.property.annual_yield_bps;
+
+        emit!(TokensPurchased {
+            property_id: ctx.accounts.property.id.clone(),
+            investor: ctx.accounts.buyer.key(),
+            token_amount,
+            cost_lamports,
+            timestamp,
+        });
+
+        msg!("Purchased {} tokens with history. Record PDA: {}", token_amount, record.key());
+        Ok(())
+    }
+
+    /// Reclaim rent from an old purchase record.
+    pub fn close_purchase_record(_ctx: Context<ClosePurchaseRecord>) -> Result<()> {
+        msg!("Purchase record closed");
         Ok(())
     }
 
@@ -540,8 +641,7 @@ pub mod solestate {
 
     // ─── 13. Cancel P2P sale listing ──────────────────────────────────────────
     pub fn cancel_sale_listing(ctx: Context<CancelSaleListing>) -> Result<()> {
-        let listing = &mut ctx.accounts.sale_listing;
-        require!(listing.is_active, SolEstateError::ListingNotActive);
+        let listing = &ctx.accounts.sale_listing;
         require!(listing.seller == ctx.accounts.seller.key(), SolEstateError::Unauthorized);
 
         let seller_key  = listing.seller;
@@ -550,7 +650,7 @@ pub mod solestate {
         let amount      = listing.token_amount;
         let bump        = listing.bump;
 
-        listing.is_active = false;
+        // Account will be closed automatically via 'close = seller' constraint in the context
 
         let seeds = &[
             b"sale_listing",
@@ -582,7 +682,7 @@ pub mod solestate {
     // ─── 14. Execute P2P sale (buyer purchases from listing) ──────────────────
     pub fn execute_sale(ctx: Context<ExecuteSale>) -> Result<()> {
         let listing = &ctx.accounts.sale_listing;
-        require!(listing.is_active, SolEstateError::ListingNotActive);
+        // require!(listing.is_active, SolEstateError::ListingNotActive); // Removed for atomic closure
 
         let total_cost = listing.price_per_token_lamports
             .checked_mul(listing.token_amount)
@@ -602,9 +702,7 @@ pub mod solestate {
         let amount      = listing.token_amount;
         let bump        = listing.bump;
 
-        // Mark listing as inactive
-        let listing_mut = &mut ctx.accounts.sale_listing;
-        listing_mut.is_active = false;
+        // Account will be closed automatically via 'close = seller' constraint in the context
 
         // Transfer SOL: buyer → seller (minus fee)
         anchor_lang::solana_program::program::invoke(
@@ -705,6 +803,23 @@ impl PropertyState {
         + 32 + 32                 // admin + mint
         + 8 + 8 + 8               // tokens x2 + price
         + 2 + 1 + 8 + 4 + 8 + 1; // yield, active, raised, investors, ts, bump
+}
+
+#[account]
+pub struct PurchaseRecord {
+    pub buyer: Pubkey,            // 32
+    pub property: Pubkey,         // 32
+    pub property_id: String,      // 4 + 32
+    pub token_mint: Pubkey,       // 32
+    pub token_amount: u64,        // 8
+    pub price_per_token: u64,     // 8
+    pub total_price: u64,         // 8
+    pub timestamp: i64,           // 8
+    pub annual_yield: u16,        // 2
+}
+
+impl PurchaseRecord {
+    pub const LEN: usize = 8 + 32 + 32 + (4 + 32) + 32 + 8 + 8 + 8 + 8 + 2;
 }
 
 #[account]
@@ -855,6 +970,65 @@ pub struct PurchaseTokens<'info> {
     pub investor: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, anchor_spl::associated_token::AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(property_id: String, token_amount: u64, timestamp: i64)]
+pub struct PurchaseTokensWithHistory<'info> {
+    #[account(
+        init,
+        payer = buyer,
+        space = PurchaseRecord::LEN,
+        seeds = [b"purchase_record", buyer.key().as_ref(), property.key().as_ref(), &timestamp.to_le_bytes()],
+        bump
+    )]
+    pub purchase_record: Box<Account<'info, PurchaseRecord>>,
+
+    #[account(
+        mut,
+        seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()],
+        bump = property.bump
+    )]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    #[account(mut, constraint = token_mint.key() == property.token_mint)]
+    pub token_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        init_if_needed,
+        payer = buyer,
+        associated_token::mint = token_mint,
+        associated_token::authority = buyer,
+    )]
+    pub buyer_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut, seeds = [b"vault", property.key().as_ref()], bump)]
+    /// CHECK: PDA vault
+    pub property_vault: UncheckedAccount<'info>,
+
+    #[account(mut, seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, anchor_spl::associated_token::AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct ClosePurchaseRecord<'info> {
+    #[account(
+        mut, 
+        close = buyer, 
+        constraint = purchase_record.buyer == buyer.key() @ SolEstateError::Unauthorized
+    )]
+    pub purchase_record: Account<'info, PurchaseRecord>,
+    #[account(mut)]
+    pub buyer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1219,6 +1393,7 @@ pub struct CreateSaleListing<'info> {
 pub struct CancelSaleListing<'info> {
     #[account(
         mut,
+        close = seller,
         seeds = [b"sale_listing", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
         bump = sale_listing.bump
     )]
@@ -1251,6 +1426,7 @@ pub struct CancelSaleListing<'info> {
 pub struct ExecuteSale<'info> {
     #[account(
         mut,
+        close = seller,
         seeds = [b"sale_listing", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
         bump = sale_listing.bump
     )]
@@ -1258,6 +1434,7 @@ pub struct ExecuteSale<'info> {
 
     #[account(
         mut,
+        close = seller,
         seeds = [b"listing_vault", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
         bump
     )]

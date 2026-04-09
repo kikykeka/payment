@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
-import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor'
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 
@@ -107,10 +107,10 @@ export function useWallet() { return useContext(WalletCtx) }
 const DEVNET = 'https://api.devnet.solana.com'
 const connection = new Connection(DEVNET, 'confirmed')
 
-const PROGRAM_ID = new PublicKey("5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN")
+const PROGRAM_ID = new PublicKey("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM")
 
 export const IDL = {
-  address: "5tPSqDkPUP5sA56K25R2jN2sUrW57mf5m1b6QTPdRzYN",
+  address: "HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM",
   metadata: { name: "solestate", version: "0.1.0", spec: "0.1.0" },
   instructions: [
     {
@@ -213,6 +213,38 @@ export const IDL = {
         { name: "systemProgram" }
       ],
       args: []
+    },
+    {
+      name: "purchaseTokensWithHistory",
+      discriminator: [127, 251, 9, 12, 102, 7, 71, 36],
+      accounts: [
+        { name: "purchaseRecord", writable: true },
+        { name: "property", writable: true },
+        { name: "tokenMint", writable: true },
+        { name: "buyerTokenAccount", writable: true },
+        { name: "propertyVault", writable: true },
+        { name: "registry", writable: true },
+        { name: "buyer", writable: true, signer: true },
+        { name: "tokenProgram" },
+        { name: "associatedTokenProgram" },
+        { name: "systemProgram" },
+        { name: "rent" }
+      ],
+      args: [
+        { name: "propertyId", type: "string" },
+        { name: "tokenAmount", type: "u64" },
+        { name: "timestamp", type: "i64" }
+      ]
+    },
+    {
+      name: "closePurchaseRecord",
+      discriminator: [111, 230, 169, 137, 246, 203, 104, 255],
+      accounts: [
+        { name: "purchaseRecord", writable: true },
+        { name: "buyer", writable: true, signer: true },
+        { name: "systemProgram" }
+      ],
+      args: []
     }
   ],
   accounts: [
@@ -222,11 +254,15 @@ export const IDL = {
     },
     {
       name: "SaleListing",
-      discriminator: [100, 203, 115, 202, 178, 12, 169, 137]
+      discriminator: [167, 97, 203, 156, 150, 97, 238, 220]
     },
     {
       name: "InvestorLockup",
-      discriminator: [111, 237, 240, 151, 160, 232, 186, 230]
+      discriminator: [187, 129, 166, 32, 119, 34, 244, 201]
+    },
+    {
+      name: "PurchaseRecord",
+      discriminator: [239, 38, 40, 199, 4, 96, 209, 2]
     }
   ],
   types: [
@@ -280,6 +316,23 @@ export const IDL = {
           { name: "bump", type: "u8" }
         ]
       }
+    },
+    {
+      name: "PurchaseRecord",
+      type: {
+        kind: "struct",
+        fields: [
+          { name: "buyer", type: "pubkey" },
+          { name: "property", type: "pubkey" },
+          { name: "propertyId", type: "string" },
+          { name: "tokenMint", type: "pubkey" },
+          { name: "tokenAmount", type: "u64" },
+          { name: "pricePerToken", type: "u64" },
+          { name: "totalPrice", type: "u64" },
+          { name: "timestamp", type: "i64" },
+          { name: "annualYield", type: "u16" }
+        ]
+      }
     }
   ]
 }
@@ -293,14 +346,68 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [balance, setBalance] = useState<number | null>(null)
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([])
 
-  // Load transaction history from wallet-specific localStorage
+  const fetchPurchaseHistory = useCallback(async (walletAddr: string) => {
+    try {
+      const p = getSolanaProvider()
+      if (!p) return
+      
+      const provider = new AnchorProvider(connection, p as any, { preflightCommitment: 'confirmed' })
+      const program = new Program(IDL as any, provider)
+      
+      // Fetch all PurchaseRecord accounts where buyer == walletAddr
+      const records = await (program.account as any).purchaseRecord.all([
+        {
+          memcmp: {
+            offset: 8, // Discriminator is 8 bytes, followed by buyer: Pubkey
+            bytes: walletAddr
+          }
+        }
+      ])
+      
+      if (records.length === 0) {
+        setPurchases([])
+        return
+      }
+      
+      // Map on-chain records to frontend PurchaseRecord interface
+      const mappedPurchases: PurchaseRecord[] = records.map((r: any) => {
+        const acc = r.account as any
+        const property = (require('./properties') as any).properties.find((p: any) => p.id === acc.propertyId)
+        
+        return {
+          id: r.publicKey.toBase58(),
+          propertyId: acc.propertyId,
+          propertyName: property?.name || 'Unknown Property',
+          propertyLocation: property?.location || 'Unknown Location',
+          propertyImage: property?.image || '',
+          tokens: acc.tokenAmount.toNumber(),
+          pricePerToken: acc.pricePerToken.toNumber() / 1e9,
+          totalSol: acc.totalPrice.toNumber() / 1e9,
+          signature: r.publicKey.toBase58(), // Using PDA as ID since we don't store sig on-chain
+          timestamp: acc.timestamp.toNumber() * 1000,
+          annualYield: acc.annualYield / 100,
+        }
+      })
+      
+      // Sort by timestamp descending
+      mappedPurchases.sort((a, b) => b.timestamp - a.timestamp)
+      
+      setPurchases(mappedPurchases)
+      savePurchases(walletAddr, mappedPurchases) // Cache in localStorage
+    } catch (err) {
+      console.error('[SolEstate] Failed to fetch purchase history:', err)
+      // Fallback to local storage if blockchain fetch fails
+      setPurchases(loadPurchases(walletAddr))
+    }
+  }, [])
+
   useEffect(() => {
     if (publicKey) {
-      setPurchases(loadPurchases(publicKey))
+      fetchPurchaseHistory(publicKey)
     } else {
       setPurchases([])
     }
-  }, [publicKey])
+  }, [publicKey, fetchPurchaseHistory])
 
   const refreshBalance = useCallback(async (addr: string) => {
     try {
@@ -396,19 +503,37 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       ASSOCIATED_TOKEN_PROGRAM_ID
     )
 
-    // 5. Invoke purchaseTokens
-    const signature = await program.methods.purchaseTokens(new BN(params.tokens))
+    // 5. Invoke purchaseTokensWithHistory
+    const timestamp = Math.floor(Date.now() / 1000)
+    
+    // Compute PurchaseRecord PDA using BN for compatibility
+    const timestampBuffer = new BN(timestamp).toArrayLike(Buffer, 'le', 8)
+    
+    const [purchaseRecordPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("purchase_record"),
+        fromAddress.toBuffer(),
+        propertyPda.toBuffer(),
+        timestampBuffer
+      ],
+      PROGRAM_ID
+    )
+
+    const signature = await program.methods
+      .purchaseTokensWithHistory(params.propertyId, new BN(params.tokens), new BN(timestamp))
       .accounts({
+        purchaseRecord: purchaseRecordPda,
         property: propertyPda,
         tokenMint: tokenMint,
-        investorTokenAccount: investorTokenAccount,
+        buyerTokenAccount: investorTokenAccount,
         propertyVault: vaultPda,
         registry: registryPda,
-        investor: fromAddress,
+        buyer: fromAddress,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-      })
+        rent: SYSVAR_RENT_PUBKEY,
+      } as any)
       .rpc()
 
     // 6. Record purchase in local State
@@ -451,4 +576,3 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   return <WalletCtx.Provider value={value}>{children}</WalletCtx.Provider>
 }
-

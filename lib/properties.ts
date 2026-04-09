@@ -31,7 +31,7 @@ export interface Property {
 
 export const properties: Property[] = [
   {
-    id: 'nyc-penthouse-001',
+    id: 'nyc-penthouse-001-v2',
     name: 'Manhattan Penthouse',
     location: 'Upper East Side, New York',
     country: 'USA',
@@ -57,7 +57,7 @@ export const properties: Property[] = [
       'Strong short-term rental demand',
       'Professional property management',
     ],
-    tokenMint: '2SKCSGVGroy6gvSiWaDxHw6Jm8w8w6DqucsmYaCWDrFC',
+    tokenMint: 'Ho47LR7aNHv7aY3gjUTke56Mb5AiTabCkZmsEwoonu8h',
     isFeatured: true,
     monthlyRent: 18500,
     occupancyRate: 94,
@@ -68,7 +68,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'miami-villa-002',
+    id: 'miami-villa-002-v2',
     name: 'Miami Beach Villa',
     location: 'South Beach, Miami',
     country: 'USA',
@@ -94,7 +94,7 @@ export const properties: Property[] = [
       'Award-winning management team',
       'Strong seasonal demand',
     ],
-    tokenMint: 'Bs6aFiCw4ewdAFFuaNXfefVqb3LG4pkQczUJnUQ21Q8K',
+    tokenMint: '6246eU39QhGUeGYhBVJgp5cuBTiraoWmMDBUfPcaYToz',
     isFeatured: true,
     monthlyRent: 32000,
     occupancyRate: 89,
@@ -105,7 +105,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'dubai-tower-003',
+    id: 'dubai-tower-003-v2',
     name: 'Dubai Marina Tower',
     location: 'Dubai Marina, Dubai',
     country: 'UAE',
@@ -131,7 +131,7 @@ export const properties: Property[] = [
       'High capital appreciation',
       'Zero property taxes',
     ],
-    tokenMint: 'AexzoL31v7trbmFqGkH2YeUf4LtJxiFY9cxt9TpTPw98',
+    tokenMint: '9Wit9KN7MrytJrsu2HMBE5er6hzmJWaJ98fsrYKTVQB1',
     isFeatured: true,
     monthlyRent: 12000,
     occupancyRate: 96,
@@ -142,7 +142,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'london-flat-004',
+    id: 'london-flat-004-v2',
     name: 'Mayfair Georgian Townhouse',
     location: 'Mayfair, London',
     country: 'UK',
@@ -168,7 +168,7 @@ export const properties: Property[] = [
       'Fully restored modern interiors',
       'Long-term capital appreciation',
     ],
-    tokenMint: 'CauLgABiLTywz89LXXS1NC2YwimkbiCMsCyafDQsbsGq',
+    tokenMint: '3rHHsbgHpxZEMLjsHQGtt4Mcm5HkSvR8HeCVBEMh1C9P',
     isFeatured: false,
     monthlyRent: 22000,
     occupancyRate: 98,
@@ -179,7 +179,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'singapore-condo-005',
+    id: 'singapore-condo-005-v2',
     name: 'Marina Bay Residences',
     location: 'Marina Bay, Singapore',
     country: 'Singapore',
@@ -205,7 +205,7 @@ export const properties: Property[] = [
       'Rooftop gardens & infinity pool',
       'Singapore stable rental market',
     ],
-    tokenMint: '895zZbeKakr96DXhxmjheD2biciyGgniwaK4wUyrnYNN',
+    tokenMint: '4BZPAyCMBUtngJTb4dGW42396YajktGy5m7MtfDMa3eJ',
     isFeatured: false,
     monthlyRent: 8500,
     occupancyRate: 97,
@@ -216,7 +216,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'tokyo-apt-006',
+    id: 'tokyo-apt-006-v2',
     name: 'Shibuya Luxury Apartments',
     location: 'Shibuya, Tokyo',
     country: 'Japan',
@@ -242,7 +242,7 @@ export const properties: Property[] = [
       'Stable Japanese property market',
       'Growing tourism & corporate demand',
     ],
-    tokenMint: '4rZKikLh8s4bjq7Z8KRXQH2KGR1D9Kz5S4woBeK2mM39',
+    tokenMint: 'F9BVXqmzoPULHD1tCGtqH3ALxvfSo2CtKEgjZYsXGnPB',
     isFeatured: false,
     monthlyRent: 4200,
     occupancyRate: 92,
@@ -253,7 +253,7 @@ export const properties: Property[] = [
     ],
   },
   {
-    id: 'barcelona-penthouse-007',
+    id: 'barcelona-penthouse-007-v2',
     name: 'Barcelona Sea View Penthouse',
     location: 'Barceloneta, Barcelona',
     country: 'Spain',
@@ -279,7 +279,7 @@ export const properties: Property[] = [
       'Barcelona tourist hotspot',
       'High vacation rental returns',
     ],
-    tokenMint: '8wSoNvYrCx1nDqBmTe5aRi9hKjMf4pLz2uGkVwXcPs3',
+    tokenMint: '35xqTidcwnBAWLH2Ku1XHMBdwGqXocbjzwR9kBDPkpNf',
     isFeatured: false,
     monthlyRent: 14500,
     occupancyRate: 88,
@@ -313,10 +313,10 @@ export function formatUSD(amount: number): string {
 
 // Mock portfolio for the dashboard
 export const mockPortfolio = [
-  { propertyId: 'nyc-penthouse-001', tokensOwned: 40, purchasePrice: 0.42, currentPrice: 0.5 },
-  { propertyId: 'miami-villa-002', tokensOwned: 120, purchasePrice: 0.20, currentPrice: 0.25 },
-  { propertyId: 'dubai-tower-003', tokensOwned: 8, purchasePrice: 0.85, currentPrice: 1.0 },
-  { propertyId: 'singapore-condo-005', tokensOwned: 60, purchasePrice: 0.52, currentPrice: 0.6 },
+  { propertyId: 'nyc-penthouse-001-v2', tokensOwned: 40, purchasePrice: 0.42, currentPrice: 0.5 },
+  { propertyId: 'miami-villa-002-v2', tokensOwned: 120, purchasePrice: 0.20, currentPrice: 0.25 },
+  { propertyId: 'dubai-tower-003-v2', tokensOwned: 8, purchasePrice: 0.85, currentPrice: 1.0 },
+  { propertyId: 'singapore-condo-005-v2', tokensOwned: 60, purchasePrice: 0.52, currentPrice: 0.6 },
 ]
 
 export const portfolioYieldHistory = [
