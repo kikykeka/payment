@@ -151,7 +151,7 @@ export async function cancelSaleListing(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc({ skipPreflight: true })
+    .rpc()
 }
 
 export async function executeSale(
@@ -325,11 +325,13 @@ export async function fetchAllUserListings(wallet: any) {
       if (accountInfo) {
         try {
           const listingAccount = await (program.account as any).saleListing.fetch(saleListingPda)
-          // Add both active and inactive accounts (inactive ones need cleanup)
-          listings.push({
-            publicKey: saleListingPda,
-            account: listingAccount
-          })
+          // Only add active listings
+          if (listingAccount.isActive) {
+            listings.push({
+              publicKey: saleListingPda,
+              account: listingAccount
+            })
+          }
         } catch (e: any) {
           // Account exists but can't be decoded - manually decode
           try {
@@ -361,20 +363,22 @@ export async function fetchAllUserListings(wallet: any) {
             // isActive: bool (1 byte)
             const isActive = accountInfo.data[offset] === 1
             
-            // Add both active and inactive accounts
-            const manuallyDecoded = {
-              seller: new PublicKey(sellerBytes),
-              property: new PublicKey(propertyBytes),
-              tokenMint: new PublicKey(tokenMintBytes),
-              tokenAmount,
-              pricePerTokenLamports,
-              isActive
+            // Only add active listings
+            if (isActive) {
+              const manuallyDecoded = {
+                seller: new PublicKey(sellerBytes),
+                property: new PublicKey(propertyBytes),
+                tokenMint: new PublicKey(tokenMintBytes),
+                tokenAmount,
+                pricePerTokenLamports,
+                isActive
+              }
+              
+              listings.push({
+                publicKey: saleListingPda,
+                account: manuallyDecoded
+              })
             }
-            
-            listings.push({
-              publicKey: saleListingPda,
-              account: manuallyDecoded
-            })
           } catch (decodeError) {
             // Skip this listing if we can't decode it
           }

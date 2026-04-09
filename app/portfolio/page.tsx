@@ -767,9 +767,17 @@ export default function PortfolioPage() {
                     }
                   } catch (e: any) {
                     console.error('[v0] Cancel listing error:', e)
-                    toast.error('Failed to cancel listing', {
-                      description: e.message || 'Please try again'
-                    })
+                    const errorMsg = e.message || e.toString()
+                    
+                    if (errorMsg.includes('ExternalAccountLamportSpend') || errorMsg.includes('instruction spent from the balance')) {
+                      toast.error('Smart Contract Limitation', {
+                        description: 'The current smart contract has a bug preventing proper cancellation. Please contact support to upgrade to the new contract version that fixes this issue.'
+                      })
+                    } else {
+                      toast.error('Failed to cancel listing', {
+                        description: errorMsg
+                      })
+                    }
                   }
                 }}
                 className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30"
