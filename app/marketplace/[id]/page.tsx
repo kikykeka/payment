@@ -72,7 +72,8 @@ export default function PropertyDetailPage({ params }: PageProps) {
   if (!property) notFound()
 
   const progress = getFundingProgress(property)
-  const status = statusConfig[property.status]
+  const isFullyFunded = property.soldTokens >= property.totalTokens
+  const status = isFullyFunded ? statusConfig.funded : statusConfig[property.status]
 
   const [tokenAmount, setTokenAmount] = useState(1)
   const [purchasing, setPurchasing] = useState(false)
@@ -95,7 +96,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
   const related = properties.filter((p) => p.id !== property.id).slice(0, 3)
 
   const handleInvest = useCallback(async () => {
-    if (property.status !== 'active') return
+    if (property.status !== 'active' || isFullyFunded) return
     if (!connected) {
       await connect()
       return
@@ -333,7 +334,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   </div>
 
                   {/* Token selector */}
-                  {property.status === 'active' && (
+                  {property.status === 'active' && !isFullyFunded && (
                     <div className="mb-6">
                       <label className="text-sm text-muted-foreground block mb-2">
                         Number of tokens
@@ -382,7 +383,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   )}
 
                   {/* Invest button */}
-                  {property.status === 'active' ? (
+                  {property.status === 'active' && !isFullyFunded ? (
                     connected ? (
                       <div className="flex gap-2">
                         <button

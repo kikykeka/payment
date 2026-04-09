@@ -389,9 +389,12 @@ export default function PortfolioPage() {
                         
                         // Check if this property already has an active listing
                         const property = PROPERTIES.find(p => p.id === propertyId)
-                        const hasActiveListing = property && activeListings.some(listing => 
+                        const propertyListing = property ? activeListings.find(listing => 
                           listing.account.tokenMint.toBase58() === property.tokenMint
-                        )
+                        ) : null
+                        
+                        const hasActiveListing = propertyListing?.account.isActive === true
+                        const hasStaleListing = propertyListing && !propertyListing.account.isActive
 
                         return (
                           <tr key={item.name} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
@@ -415,7 +418,11 @@ export default function PortfolioPage() {
                             <td className="px-6 py-4 text-right">
                               {propertyId && (
                                 <div className="flex items-center justify-end gap-4">
-                                  {!hasActiveListing ? (
+                                  {hasActiveListing ? (
+                                    <span className="text-xs text-white/30 font-medium">Listed</span>
+                                  ) : hasStaleListing ? (
+                                    <span className="text-xs text-red-400 font-bold">Needs Cleanup</span>
+                                  ) : (
                                     <button
                                       onClick={() => {
                                         const property = PROPERTIES.find(p => p.id === propertyId)
@@ -431,8 +438,6 @@ export default function PortfolioPage() {
                                     >
                                       Sell
                                     </button>
-                                  ) : (
-                                    <span className="text-xs text-white/30 font-medium">Listed</span>
                                   )}
                                   <button
                                     onClick={async () => {
@@ -535,8 +540,17 @@ export default function PortfolioPage() {
                                       <div className="min-w-0">
                                         <p className="text-sm font-bold text-white truncate">{property?.name ?? 'Unknown Asset'}</p>
                                         <div className="flex items-center gap-1.5 mt-1">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                                          <span className="text-[10px] text-accent font-mono tracking-wider">LISTED ON SECONDARY</span>
+                                          {listing.account.isActive ? (
+                                            <>
+                                              <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                                              <span className="text-[10px] text-accent font-mono tracking-wider">LISTED ON SECONDARY</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                              <span className="text-[10px] text-red-500 font-mono tracking-wider">STALE / NEEDS CLEANUP</span>
+                                            </>
+                                          )}
                                         </div>
                                       </div>
                                    </div>
@@ -551,7 +565,7 @@ export default function PortfolioPage() {
                                      }}
                                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/5 text-white/40 hover:bg-red-500/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30"
                                    >
-                                     CANCEL LISTING
+                                      {listing.account.isActive ? "CANCEL LISTING" : "CLEANUP STALE LISTING"}
                                    </button>
                                  </td>
                                </tr>
@@ -698,9 +712,13 @@ export default function PortfolioPage() {
                 <AlertCircle className="w-6 h-6 text-red-500" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white mb-2">Cancel Listing?</h3>
+                <h3 className="text-xl font-bold text-white mb-2">
+                  {activeListings[cancelConfirmModal.listingIndex]?.account?.isActive ? 'Cancel Listing?' : 'Cleanup Stale Listing?'}
+                </h3>
                 <p className="text-sm text-white/60 leading-relaxed">
-                  Are you sure you want to delist these tokens? They will be returned to your wallet.
+                  {activeListings[cancelConfirmModal.listingIndex]?.account?.isActive 
+                    ? 'Are you sure you want to delist these tokens?'
+                    : 'This is a stale record blocking new sales. Cleanup will close the account and refund SOL.'}
                 </p>
               </div>
             </div>
