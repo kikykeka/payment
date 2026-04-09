@@ -86,7 +86,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
 
   const { connected, connect, shortAddress, sendPurchaseTx, purchases } = useWallet()
   const [isSellModalOpen, setIsSellModalOpen] = useState(false)
-  
+
   const userHoldings = useMemo(() => {
     return purchases
       .filter(p => p.propertyId === property.id)
@@ -180,35 +180,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
               {/* Description */}
               <div>
                 <h2 className="text-xl font-semibold text-foreground mb-3">About this property</h2>
-                <p className="text-muted-foreground leading-relaxed mb-6">{property.description}</p>
-                
-                {/* Property stats moved here for better alignment with sidebar */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {property.bedrooms && (
-                    <div className="glass rounded-xl p-4 border-glow">
-                      <Home className="w-4 h-4 text-muted-foreground mb-2" />
-                      <p className="text-lg font-semibold text-foreground">{property.bedrooms}</p>
-                      <p className="text-xs text-muted-foreground">Bedrooms</p>
-                    </div>
-                  )}
-                  {property.bathrooms && (
-                    <div className="glass rounded-xl p-4 border-glow">
-                      <Bath className="w-4 h-4 text-muted-foreground mb-2" />
-                      <p className="text-lg font-semibold text-foreground">{property.bathrooms}</p>
-                      <p className="text-xs text-muted-foreground">Bathrooms</p>
-                    </div>
-                  )}
-                  <div className="glass rounded-xl p-4 border-glow">
-                    <Maximize2 className="w-4 h-4 text-muted-foreground mb-2" />
-                    <p className="text-lg font-semibold text-foreground">{formatNum(property.sqft)}</p>
-                    <p className="text-xs text-muted-foreground">Sq. ft.</p>
-                  </div>
-                  <div className="glass rounded-xl p-4 border-glow">
-                    <Calendar className="w-4 h-4 text-muted-foreground mb-2" />
-                    <p className="text-lg font-semibold text-foreground">{property.yearBuilt}</p>
-                    <p className="text-xs text-muted-foreground">Year Built</p>
-                  </div>
-                </div>
+                <p className="text-muted-foreground leading-relaxed">{property.description}</p>
               </div>
 
               {/* Highlights */}
@@ -402,8 +374,8 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   {txStatus && (
                     <div
                       className={`mt-4 rounded-xl p-4 flex items-start gap-3 border text-sm ${txStatus.state === 'success'
-                          ? 'bg-accent/10 border-accent/30'
-                          : 'bg-destructive/10 border-destructive/30'
+                        ? 'bg-accent/10 border-accent/30'
+                        : 'bg-destructive/10 border-destructive/30'
                         }`}
                     >
                       {txStatus.state === 'success' ? (
@@ -461,7 +433,38 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   </div>
                 </div>
 
-                {/* Quick stats */}
+                {/* Property Stats (moved from left column) */}
+                <div className="glass rounded-2xl p-6 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Property Specifications</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {property.bedrooms && (
+                      <div className="p-3 rounded-xl bg-secondary/30 border border-white/5">
+                        <Home className="w-3 h-3 text-muted-foreground mb-1.5" />
+                        <p className="text-sm font-semibold text-foreground">{property.bedrooms}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Beds</p>
+                      </div>
+                    )}
+                    {property.bathrooms && (
+                      <div className="p-3 rounded-xl bg-secondary/30 border border-white/5">
+                        <Bath className="w-3 h-3 text-muted-foreground mb-1.5" />
+                        <p className="text-sm font-semibold text-foreground">{property.bathrooms}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Baths</p>
+                      </div>
+                    )}
+                    <div className="p-3 rounded-xl bg-secondary/30 border border-white/5">
+                      <Maximize2 className="w-3 h-3 text-muted-foreground mb-1.5" />
+                      <p className="text-sm font-semibold text-foreground">{formatNum(property.sqft)}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Sq. Ft.</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-secondary/30 border border-white/5">
+                      <Calendar className="w-3 h-3 text-muted-foreground mb-1.5" />
+                      <p className="text-sm font-semibold text-foreground">{property.yearBuilt}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Built</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick stats / Financial Summary */}
                 <div className="glass rounded-2xl p-6 border-glow">
                   <h3 className="text-sm font-semibold text-foreground mb-4">Financial Summary</h3>
                   <div className="space-y-3">
@@ -537,21 +540,21 @@ export default function PropertyDetailPage({ params }: PageProps) {
           tokenMint: '' // Handled by library
         }}
         maxTokens={userHoldings}
- onSell={async (amt, prc) => {
-  const wallet = (window as any).phantom?.solana
-  const priceLamports = Math.floor(prc * 1e9)
-  try {
-    await createSaleListing(wallet, property.id, amt, priceLamports)
-    toast.success('Successfully listed for sale!', {
-      description: `${amt} tokens listed at ${prc} SOL each. View in Portfolio > Active Listings`
-    })
-  } catch (e: any) {
-    toast.error('Failed to create listing', {
-      description: e.message
-    })
-    throw e
-  }
-  }}
+        onSell={async (amt, prc) => {
+          const wallet = (window as any).phantom?.solana
+          const priceLamports = Math.floor(prc * 1e9)
+          try {
+            await createSaleListing(wallet, property.id, amt, priceLamports)
+            toast.success('Successfully listed for sale!', {
+              description: `${amt} tokens listed at ${prc} SOL each. View in Portfolio > Active Listings`
+            })
+          } catch (e: any) {
+            toast.error('Failed to create listing', {
+              description: e.message
+            })
+            throw e
+          }
+        }}
       />
     </div>
   )
