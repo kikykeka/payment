@@ -663,24 +663,6 @@ pub mod solestate {
 
         let listing = &mut ctx.accounts.sale_listing;
         let clock = Clock::get()?;
-        
-        // Ensure 24-hour cooldown has passed if cooldown PDA is already initialized
-        if !ctx.accounts.cooldown.data_is_empty() {
-            let data = ctx.accounts.cooldown.data.borrow();
-            // Layout: 8 discriminator + 8 i64 (last_cancel_time) + 1 u8 (bump)
-            if data.len() >= 17 {
-                let last_cancel = i64::from_le_bytes(
-                    data[8..16].try_into().map_err(|_| SolEstateError::ArithmeticOverflow)?
-                );
-                if last_cancel > 0 {
-                    let clock = Clock::get()?;
-                    require!(
-                        clock.unix_timestamp >= last_cancel + 86400,
-                        SolEstateError::CooldownActive
-                    );
-                }
-            }
-        }
 
         listing.seller                  = ctx.accounts.seller.key();
         listing.property                = ctx.accounts.property.key();
