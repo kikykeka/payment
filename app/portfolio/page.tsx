@@ -763,30 +763,13 @@ export default function PortfolioPage() {
                       // Wait for blockchain to process, then refresh
                       setTimeout(async () => {
                         await refreshListings()
-                      }, 2000)
+                      }, 3000)
                     }
                   } catch (e: any) {
-                    console.error(e)
-                    // Check if tokens were returned despite the error
-                    const errorMsg = e.message || e.toString()
-                    const logsStr = e.logs ? JSON.stringify(e.logs) : errorMsg
-                    const tokensReturned = logsStr.includes('Listing cancelled') || 
-                                          logsStr.includes('tokens returned to seller')
-                    
-                    if (tokensReturned) {
-                      // Partial success - tokens returned but account close failed
-                      toast.warning('Listing cancelled', {
-                        description: 'Your tokens were returned successfully. The listing is now inactive.'
-                      })
-                      setCancelConfirmModal(null)
-                      setTimeout(async () => {
-                        await refreshListings()
-                      }, 2000)
-                    } else {
-                      toast.error('Failed to cancel listing', {
-                        description: e.message
-                      })
-                    }
+                    console.error('[v0] Cancel listing error:', e)
+                    toast.error('Failed to cancel listing', {
+                      description: e.message || 'Please try again'
+                    })
                   }
                 }}
                 className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30"

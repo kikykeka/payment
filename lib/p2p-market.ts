@@ -152,7 +152,7 @@ export async function cancelSaleListing(
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
     })
-    .rpc()
+    .rpc({ skipPreflight: true })
 }
 
 export async function executeSale(
