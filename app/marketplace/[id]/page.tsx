@@ -288,7 +288,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
 
             {/* Right: investment panel (sticky) */}
             <div className="lg:col-span-1">
-              <div className="sticky top-20 space-y-4">
+              <div className="space-y-4">
                 {/* Investment card */}
                 <div className="glass rounded-2xl p-6 border-glow">
                   {/* Key metrics */}
