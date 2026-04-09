@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import { Connection, PublicKey, Transaction, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor'
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { PROGRAM_ID as PROGRAM_ID_STR, DEVNET_RPC, COMMITMENT } from './config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,23 +48,6 @@ export interface PurchaseRecord {
   annualYield: number
 }
 
-function getStorageKey(walletAddress: string): string {
-  return `solestate_purchases_${walletAddress}`
-}
-
-function loadPurchases(walletAddress: string | null): PurchaseRecord[] {
-  if (typeof window === 'undefined' || !walletAddress) return []
-  try {
-    const raw = localStorage.getItem(getStorageKey(walletAddress))
-    return raw ? (JSON.parse(raw) as PurchaseRecord[]) : []
-  } catch { return [] }
-}
-
-function savePurchases(walletAddress: string, list: PurchaseRecord[]) {
-  try { 
-    localStorage.setItem(getStorageKey(walletAddress), JSON.stringify(list)) 
-  } catch { /* noop */ }
-}
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -104,13 +88,11 @@ export function useWallet() { return useContext(WalletCtx) }
 
 // ── Smart Contract Setup ──────────────────────────────────────────────────────
 
-const DEVNET = 'https://api.devnet.solana.com'
-const connection = new Connection(DEVNET, 'confirmed')
-
-const PROGRAM_ID = new PublicKey("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM")
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR)
+const connection = new Connection(DEVNET_RPC, COMMITMENT)
 
 export const IDL = {
-  address: "HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM",
+  address: PROGRAM_ID_STR,
   metadata: { name: "solestate", version: "0.1.0", spec: "0.1.0" },
   instructions: [
     {
@@ -175,7 +157,8 @@ export const IDL = {
         { name: "seller", writable: true, signer: true },
         { name: "tokenProgram" },
         { name: "systemProgram" },
-        { name: "rent" }
+        { name: "rent" },
+        { name: "cooldown", writable: true }
       ],
       args: [{ name: "tokenAmount", type: "u64" }, { name: "pricePerTokenLamports", type: "u64" }]
     },
@@ -191,7 +174,8 @@ export const IDL = {
         { name: "registry" },
         { name: "seller", writable: true, signer: true },
         { name: "tokenProgram" },
-        { name: "systemProgram" }
+        { name: "systemProgram" },
+        { name: "cooldown", writable: true }
       ],
       args: []
     },
@@ -391,13 +375,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       
       // Sort by timestamp descending
       mappedPurchases.sort((a, b) => b.timestamp - a.timestamp)
-      
       setPurchases(mappedPurchases)
-      savePurchases(walletAddr, mappedPurchases) // Cache in localStorage
     } catch (err) {
       console.error('[SolEstate] Failed to fetch purchase history:', err)
-      // Fallback to local storage if blockchain fetch fails
-      setPurchases(loadPurchases(walletAddr))
+      setPurchases([]) // no localStorage fallback — blockchain is source of truth
     }
   }, [])
 
@@ -550,13 +531,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       timestamp: Date.now(),
       annualYield: params.annualYield,
     }
-    setPurchases((prev) => {
-      const next = [record, ...prev]
-      if (publicKey) {
-        savePurchases(publicKey, next)
-      }
-      return next
-    })
+    setPurchases((prev) => [record, ...prev])
 
     // 7. Refresh SOL balance
     refreshBalance(fromAddress.toBase58())

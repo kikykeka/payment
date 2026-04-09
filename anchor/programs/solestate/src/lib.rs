@@ -1,8 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
-use anchor_spl::metadata::{create_metadata_accounts_v3, CreateMetadataAccountsV3, Metadata, mpl_token_metadata::types::DataV2};
+use anchor_spl::metadata::{
+    create_metadata_accounts_v3, CreateMetadataAccountsV3,
+    update_metadata_accounts_v2, UpdateMetadataAccountsV2,
+    Metadata, mpl_token_metadata::types::DataV2,
+};
 
-declare_id!("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM");
+declare_id!("49yz2fypShXqaGgopGx3vK73ojKdwZnLzydZE2iPBRr7");
 
 // ── Platform constants (outside program module) ──────────────────────────
 // 2% platform fee on all P2P secondary market sales
@@ -510,6 +514,52 @@ pub mod solestate {
         Ok(())
     }
 
+    // ─── 8b. Update Metaplex Metadata (name / symbol / uri) ──────────────────
+    pub fn update_property_metadata(
+        ctx: Context<UpdatePropertyMetadata>,
+        name: String,
+        symbol: String,
+        uri: String,
+    ) -> Result<()> {
+        let registry_key  = ctx.accounts.registry.key();
+        let property_id   = ctx.accounts.property.id.clone();
+        let property_bump = ctx.accounts.property.bump;
+
+        let seeds = &[
+            b"property",
+            registry_key.as_ref(),
+            property_id.as_bytes(),
+            &[property_bump],
+        ];
+        let signer_seeds = &[&seeds[..]];
+
+        update_metadata_accounts_v2(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_metadata_program.to_account_info(),
+                UpdateMetadataAccountsV2 {
+                    metadata: ctx.accounts.metadata_account.to_account_info(),
+                    update_authority: ctx.accounts.property.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            None,               // new_update_authority
+            Some(DataV2 {
+                name,
+                symbol,
+                uri,
+                seller_fee_basis_points: 0,
+                creators: None,
+                collection: None,
+                uses: None,
+            }),
+            None,               // primary_sale_happened
+            Some(true),         // is_mutable
+        )?;
+
+        msg!("Metadata updated for {}", ctx.accounts.property.id);
+        Ok(())
+    }
+
     // ─── 9. Initialize Platform Treasury ─────────────────────────────────────
     pub fn initialize_treasury(ctx: Context<InitializeTreasury>) -> Result<()> {
         let treasury = &mut ctx.accounts.treasury;
@@ -613,6 +663,25 @@ pub mod solestate {
 
         let listing = &mut ctx.accounts.sale_listing;
         let clock = Clock::get()?;
+        
+        // Ensure 24-hour cooldown has passed if cooldown PDA is already initialized
+        if !ctx.accounts.cooldown.data_is_empty() {
+            let data = ctx.accounts.cooldown.data.borrow();
+            // Layout: 8 discriminator + 8 i64 (last_cancel_time) + 1 u8 (bump)
+            if data.len() >= 17 {
+                let last_cancel = i64::from_le_bytes(
+                    data[8..16].try_into().map_err(|_| SolEstateError::ArithmeticOverflow)?
+                );
+                if last_cancel > 0 {
+                    let clock = Clock::get()?;
+                    require!(
+                        clock.unix_timestamp >= last_cancel + 86400,
+                        SolEstateError::CooldownActive
+                    );
+                }
+            }
+        }
+
         listing.seller                  = ctx.accounts.seller.key();
         listing.property                = ctx.accounts.property.key();
         listing.token_mint              = ctx.accounts.token_mint.key();
@@ -652,6 +721,11 @@ pub mod solestate {
 
         // Account will be closed automatically via 'close = seller' constraint in the context
 
+        let clock = Clock::get()?;
+        let cooldown = &mut ctx.accounts.cooldown;
+        cooldown.last_cancel_time = clock.unix_timestamp;
+        cooldown.bump = ctx.bumps.cooldown;
+
         let seeds = &[
             b"sale_listing",
             seller_key.as_ref(),
@@ -673,6 +747,19 @@ pub mod solestate {
                 signer_seeds,
             ),
             amount * 1_000_000,
+        )?;
+
+        // Close the vault account and return rent to the seller
+        token::close_account(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::CloseAccount {
+                    account: ctx.accounts.listing_vault.to_account_info(),
+                    destination: ctx.accounts.seller.to_account_info(),
+                    authority: ctx.accounts.sale_listing.to_account_info(),
+                },
+                signer_seeds,
+            )
         )?;
 
         msg!("Listing cancelled, {} tokens returned to seller", amount);
@@ -701,8 +788,6 @@ pub mod solestate {
         let mint_key    = listing.token_mint;
         let amount      = listing.token_amount;
         let bump        = listing.bump;
-
-        // Account will be closed automatically via 'close = seller' constraint in the context
 
         // Transfer SOL: buyer → seller (minus fee)
         anchor_lang::solana_program::program::invoke(
@@ -1264,6 +1349,40 @@ pub struct CreatePropertyMetadata<'info> {
 }
 
 #[derive(Accounts)]
+pub struct UpdatePropertyMetadata<'info> {
+    #[account(
+        seeds = [b"property", registry.key().as_ref(), property.id.as_bytes()],
+        bump = property.bump
+    )]
+    pub property: Box<Account<'info, PropertyState>>,
+
+    /// CHECK: Metaplex Metadata PDA — will be mutated via CPI
+    #[account(
+        mut,
+        seeds = [
+            b"metadata",
+            token_metadata_program.key().as_ref(),
+            token_mint.key().as_ref()
+        ],
+        seeds::program = token_metadata_program.key(),
+        bump,
+    )]
+    pub metadata_account: UncheckedAccount<'info>,
+
+    #[account(constraint = token_mint.key() == property.token_mint)]
+    pub token_mint: Box<Account<'info, Mint>>,
+
+    #[account(seeds = [b"registry"], bump = registry.bump)]
+    pub registry: Box<Account<'info, PropertyRegistry>>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    pub token_metadata_program: Program<'info, Metadata>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct InitializeTreasury<'info> {
     #[account(
         init,
@@ -1387,6 +1506,14 @@ pub struct CreateSaleListing<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+
+    /// CHECK: Read-only — we manually inspect the cooldown timestamp if initialized.
+    /// PDA seeds are verified via the constraint below.
+    #[account(
+        seeds = [b"cooldown", seller.key().as_ref(), property.key().as_ref()],
+        bump
+    )]
+    pub cooldown: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -1420,6 +1547,15 @@ pub struct CancelSaleListing<'info> {
     pub seller: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+
+    #[account(
+        init_if_needed,
+        payer = seller,
+        space = ListingCooldown::LEN,
+        seeds = [b"cooldown", seller.key().as_ref(), property.key().as_ref()],
+        bump
+    )]
+    pub cooldown: Box<Account<'info, ListingCooldown>>,
 }
 
 #[derive(Accounts)]
@@ -1434,7 +1570,6 @@ pub struct ExecuteSale<'info> {
 
     #[account(
         mut,
-        close = seller,
         seeds = [b"listing_vault", seller.key().as_ref(), property.key().as_ref(), token_mint.key().as_ref()],
         bump
     )]
@@ -1492,4 +1627,16 @@ pub enum SolEstateError {
     LockDurationTooShort,
     #[msg("Lockup period has not expired yet")]
     LockupNotExpired,
+    #[msg("You must wait 24 hours after cancelling a listing before relisting")]
+    CooldownActive,
+}
+
+#[account]
+pub struct ListingCooldown {
+    pub last_cancel_time: i64,
+    pub bump: u8,
+}
+
+impl ListingCooldown {
+    pub const LEN: usize = 8 + 8 + 1;
 }

@@ -2,13 +2,13 @@ import { Connection, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solan
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor'
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { IDL } from './wallet-context'
+import { PROGRAM_ID as PROGRAM_ID_STR, DEVNET_RPC, COMMITMENT } from './config'
 
-const DEVNET = 'https://api.devnet.solana.com'
-const connection = new Connection(DEVNET, 'confirmed')
-const PROGRAM_ID = new PublicKey("HSvH1CMkjiY6ce5B4BjuHNkHdan6sGb9J5d1WUUJf1GM")
+const connection = new Connection(DEVNET_RPC, COMMITMENT)
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR)
 
 function getProvider(wallet: any) {
-  return new AnchorProvider(connection, wallet, { preflightCommitment: 'confirmed' })
+  return new AnchorProvider(connection, wallet, { preflightCommitment: COMMITMENT })
 }
 
 export async function checkExistingListing(
@@ -95,6 +95,32 @@ export async function createSaleListing(
     }
   }
 
+  // ── Pre-flight: verify on-chain token balance ──────────────────────────────
+  const sellerAtaInfo = await connection.getAccountInfo(sellerTokenAccount)
+  if (!sellerAtaInfo) {
+    const mintStr = mintPk.toBase58().slice(0, 8) + '...'
+    throw new Error(
+      `No token account found for mint ${mintStr}. ` +
+      `Make sure the purchase transaction was confirmed on-chain (check Solscan), ` +
+      `then try again. If the issue persists, you may need to buy tokens again.`
+    )
+  }
+  // SPL Token layout: bytes 64-71 = amount (u64 LE)
+  const rawAmount = sellerAtaInfo.data.readBigUInt64LE(64)
+  const requiredRaw = BigInt(tokenAmount) * 1_000_000n
+  if (rawAmount < requiredRaw) {
+    const owned = Number(rawAmount) / 1_000_000
+    throw new Error(
+      `On-chain balance: ${owned} token(s). ` +
+      `You tried to list ${tokenAmount}. Purchase more tokens and wait for confirmation.`
+    )
+  }
+
+  const [cooldownPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("cooldown"), seller.toBuffer(), propertyPda.toBuffer()],
+    PROGRAM_ID
+  )
+
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
     .accounts({
       saleListing: saleListingPda,
@@ -107,6 +133,7 @@ export async function createSaleListing(
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
       rent: SYSVAR_RENT_PUBKEY,
+      cooldown: cooldownPda,
     })
     .rpc()
 }
@@ -139,6 +166,11 @@ export async function cancelSaleListing(
 
   const sellerTokenAccount = getAssociatedTokenAddressSync(mintPk, seller, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
 
+  const [cooldownPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("cooldown"), seller.toBuffer(), propertyPda.toBuffer()],
+    PROGRAM_ID
+  )
+
   return await program.methods.cancelSaleListing()
     .accounts({
       saleListing: saleListingPda,
@@ -150,6 +182,7 @@ export async function cancelSaleListing(
       seller,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
+      cooldown: cooldownPda,
     })
     .rpc()
 }

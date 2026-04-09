@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-solestate = "PPhxtiw3VfxsC9jTFfX9AsXqjABkmuTTSQU3PVgDh3o"
+solestate = "49yz2fypShXqaGgopGx3vK73ojKdwZnLzydZE2iPBRr7"
 
 [registry]
 url = "https://api.apr.dev"
