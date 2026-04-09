@@ -462,9 +462,9 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
 
                 {/* Quick stats */}
-                <div className="glass rounded-2xl p-5 border-glow">
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Financial Summary</h3>
-                  <div className="space-y-2.5">
+                <div className="glass rounded-2xl p-6 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Financial Summary</h3>
+                  <div className="space-y-3">
                     {[
                       { label: 'Target Raise', value: formatUSD(property.targetRaise) },
                       { label: 'Min. Investment', value: formatSOL(property.minInvestment) },
@@ -480,9 +480,9 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
 
                 {/* Token info */}
-                <div className="glass rounded-2xl p-5 border-glow">
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Token Information</h3>
-                  <div className="space-y-2.5">
+                <div className="glass rounded-2xl p-6 border-glow">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">Token Information</h3>
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Token Mint</span>
                       <a
@@ -492,7 +492,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
                         className="flex items-center gap-1 font-mono text-xs text-primary hover:underline"
                       >
                         {property.tokenMint.slice(0, 4)}...{property.tokenMint.slice(-4)}
-                        <ExternalLink className="w-2.5 h-2.5" />
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                     <div className="flex items-center justify-between text-sm">
