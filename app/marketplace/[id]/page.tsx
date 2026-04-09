@@ -483,27 +483,27 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 <div className="glass rounded-2xl p-5 border-glow">
                   <h3 className="text-sm font-semibold text-foreground mb-3">Token Information</h3>
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Token Mint</span>
                       <a
                         href={`https://solscan.io/token/${property.tokenMint}?cluster=devnet`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+                        className="flex items-center gap-1 font-mono text-xs text-primary hover:underline"
                       >
                         {property.tokenMint.slice(0, 4)}...{property.tokenMint.slice(-4)}
                         <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Network</span>
                       <span className="text-foreground font-medium">Devnet</span>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Standard</span>
                       <span className="text-foreground font-medium">SPL</span>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Total Supply</span>
                       <span className="text-foreground font-medium">{formatNum(property.totalTokens)}</span>
                     </div>
