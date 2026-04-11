@@ -8,7 +8,33 @@ const connection = new Connection(DEVNET_RPC, COMMITMENT)
 const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR)
 
 function getProvider(wallet: any) {
-  return new AnchorProvider(connection, wallet, { preflightCommitment: COMMITMENT })
+  return new AnchorProvider(connection, wallet, {
+    preflightCommitment: 'confirmed',
+    commitment: 'confirmed',
+  })
+}
+
+// Если транзакция уже была обработана — это не ошибка, просто возвращаем успех
+function isAlreadyProcessed(err: any): boolean {
+  const msg: string = err?.message ?? err?.toString() ?? ''
+  return (
+    msg.includes('already been processed') ||
+    msg.includes('AlreadyProcessed') ||
+    (err?.logs != null && Array.isArray(err.logs) && err.logs.length === 0 &&
+      msg.includes('Transaction simulation failed'))
+  )
+}
+
+async function safeRpc(builder: any): Promise<string> {
+  try {
+    return await builder.rpc({ skipPreflight: true, commitment: 'confirmed' })
+  } catch (err: any) {
+    if (isAlreadyProcessed(err)) {
+      // Транзакция уже прошла — считаем успехом
+      return 'already_processed'
+    }
+    throw err
+  }
 }
 
 export async function checkExistingListing(
@@ -121,21 +147,22 @@ export async function createSaleListing(
     PROGRAM_ID
   )
 
-  return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
-    .accounts({
-      saleListing: saleListingPda,
-      listingVault: listingVaultPda,
-      sellerTokenAccount,
-      property: propertyPda,
-      tokenMint: mintPk,
-      registry: registryPda,
-      seller,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      rent: SYSVAR_RENT_PUBKEY,
-      cooldown: cooldownPda,
-    })
-    .rpc()
+  return await safeRpc(
+    program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
+      .accounts({
+        saleListing: saleListingPda,
+        listingVault: listingVaultPda,
+        sellerTokenAccount,
+        property: propertyPda,
+        tokenMint: mintPk,
+        registry: registryPda,
+        seller,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+        cooldown: cooldownPda,
+      })
+  )
 }
 
 export async function cancelSaleListing(
@@ -171,20 +198,21 @@ export async function cancelSaleListing(
     PROGRAM_ID
   )
 
-  return await program.methods.cancelSaleListing()
-    .accounts({
-      saleListing: saleListingPda,
-      listingVault: listingVaultPda,
-      sellerTokenAccount,
-      property: propertyPda,
-      tokenMint: mintPk,
-      registry: registryPda,
-      seller,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-      cooldown: cooldownPda,
-    })
-    .rpc()
+  return await safeRpc(
+    program.methods.cancelSaleListing()
+      .accounts({
+        saleListing: saleListingPda,
+        listingVault: listingVaultPda,
+        sellerTokenAccount,
+        property: propertyPda,
+        tokenMint: mintPk,
+        registry: registryPda,
+        seller,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        cooldown: cooldownPda,
+      })
+  )
 }
 
 export async function executeSale(
@@ -218,22 +246,23 @@ export async function executeSale(
 
   const buyerTokenAccount = getAssociatedTokenAddressSync(mintPk, buyer, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
 
-  return await program.methods.executeSale()
-    .accounts({
-      saleListing: saleListingPda,
-      listingVault: listingVaultPda,
-      buyerTokenAccount,
-      treasury: treasuryPda,
-      property: propertyPda,
-      tokenMint: mintPk,
-      registry: registryPda,
-      seller,
-      buyer,
-      tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc()
+  return await safeRpc(
+    program.methods.executeSale()
+      .accounts({
+        saleListing: saleListingPda,
+        listingVault: listingVaultPda,
+        buyerTokenAccount,
+        treasury: treasuryPda,
+        property: propertyPda,
+        tokenMint: mintPk,
+        registry: registryPda,
+        seller,
+        buyer,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+  )
 }
 
 export async function lockTokens(
