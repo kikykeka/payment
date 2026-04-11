@@ -27,10 +27,11 @@ function isAlreadyProcessed(err: any): boolean {
 
 async function safeRpc(builder: any): Promise<string> {
   try {
-    return await builder.rpc({ skipPreflight: true, commitment: 'confirmed' })
+    // skipPreflight: false — Phantom симулирует транзакцию и показывает изменения баланса
+    return await builder.rpc({ skipPreflight: false, commitment: 'confirmed' })
   } catch (err: any) {
     if (isAlreadyProcessed(err)) {
-      // Транзакция уже прошла — считаем успехом
+      // Транзакция уже прошла успешно — считаем это успехом, а не ошибкой
       return 'already_processed'
     }
     throw err
