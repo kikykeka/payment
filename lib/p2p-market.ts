@@ -8,7 +8,20 @@ const connection = new Connection(DEVNET_RPC, COMMITMENT)
 const PROGRAM_ID = new PublicKey(PROGRAM_ID_STR)
 
 function getProvider(wallet: any) {
-  return new AnchorProvider(connection, wallet, { preflightCommitment: COMMITMENT })
+  return new AnchorProvider(connection, wallet, {
+    preflightCommitment: 'confirmed',
+    commitment: 'confirmed',
+  })
+}
+
+// Возвращает опции для .rpc() чтобы избежать ошибки "already processed"
+async function freshRpcOpts() {
+  await connection.getLatestBlockhash('confirmed')
+  return {
+    skipPreflight: false,
+    preflightCommitment: 'confirmed' as const,
+    maxRetries: 0,
+  }
 }
 
 export async function checkExistingListing(
@@ -121,6 +134,7 @@ export async function createSaleListing(
     PROGRAM_ID
   )
 
+  const rpcOpts = await freshRpcOpts()
   return await program.methods.createSaleListing(new BN(tokenAmount), new BN(pricePerTokenLamports))
     .accounts({
       saleListing: saleListingPda,
@@ -135,7 +149,7 @@ export async function createSaleListing(
       rent: SYSVAR_RENT_PUBKEY,
       cooldown: cooldownPda,
     })
-    .rpc()
+    .rpc(rpcOpts)
 }
 
 export async function cancelSaleListing(
@@ -171,6 +185,7 @@ export async function cancelSaleListing(
     PROGRAM_ID
   )
 
+  const rpcOpts = await freshRpcOpts()
   return await program.methods.cancelSaleListing()
     .accounts({
       saleListing: saleListingPda,
@@ -184,7 +199,7 @@ export async function cancelSaleListing(
       systemProgram: SystemProgram.programId,
       cooldown: cooldownPda,
     })
-    .rpc()
+    .rpc(rpcOpts)
 }
 
 export async function executeSale(
@@ -218,6 +233,7 @@ export async function executeSale(
 
   const buyerTokenAccount = getAssociatedTokenAddressSync(mintPk, buyer, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
 
+  const rpcOpts = await freshRpcOpts()
   return await program.methods.executeSale()
     .accounts({
       saleListing: saleListingPda,
@@ -233,7 +249,7 @@ export async function executeSale(
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
-    .rpc()
+    .rpc(rpcOpts)
 }
 
 export async function lockTokens(
