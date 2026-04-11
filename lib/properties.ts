@@ -313,10 +313,10 @@ export function formatUSD(amount: number): string {
 
 // Mock portfolio for the dashboard
 export const mockPortfolio = [
-  { propertyId: 'nyc-penthouse-001-v2', tokensOwned: 40, purchasePrice: 0.42, currentPrice: 0.5 },
-  { propertyId: 'miami-villa-002-v2', tokensOwned: 120, purchasePrice: 0.20, currentPrice: 0.25 },
-  { propertyId: 'dubai-tower-003-v2', tokensOwned: 8, purchasePrice: 0.85, currentPrice: 1.0 },
-  { propertyId: 'singapore-condo-005-v2', tokensOwned: 60, purchasePrice: 0.52, currentPrice: 0.6 },
+  { propertyId: 'nyc-penthouse-001-v3', tokensOwned: 40, purchasePrice: 0.42, currentPrice: 0.5 },
+  { propertyId: 'miami-villa-002-v3', tokensOwned: 120, purchasePrice: 0.20, currentPrice: 0.25 },
+  { propertyId: 'dubai-tower-003-v3', tokensOwned: 8, purchasePrice: 0.85, currentPrice: 1.0 },
+  { propertyId: 'singapore-condo-005-v3', tokensOwned: 60, purchasePrice: 0.52, currentPrice: 0.6 },
 ]
 
 export const portfolioYieldHistory = [
