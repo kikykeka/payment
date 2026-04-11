@@ -69,7 +69,6 @@ export default function PortfolioPage() {
   const [isLoadingListings, setIsLoadingListings] = useState(false)
   const [sellModalData, setSellModalData] = useState<{ isOpen: boolean, property: any, tokens: number } | null>(null)
   const [cancelConfirmModal, setCancelConfirmModal] = useState<{ isOpen: boolean, property: any, listingIndex: number } | null>(null)
-  const [isCancelling, setIsCancelling] = useState(false)
   const [transactionPage, setTransactionPage] = useState(1)
   const transactionsPerPage = 5
 
@@ -751,14 +750,11 @@ export default function PortfolioPage() {
                 Отмена
               </button>
               <button
-                disabled={isCancelling}
                 onClick={async () => {
-                  if (isCancelling) return
                   const wallet = (window as any).phantom?.solana
                   const property = cancelConfirmModal.property
                   try {
                     if (property) {
-                      setIsCancelling(true)
                       await cancelSaleListing(wallet, property.id)
                       toast.success('Listing cancelled!', {
                         description: 'Your tokens have been returned to your wallet'
@@ -774,13 +770,11 @@ export default function PortfolioPage() {
                     toast.error('Failed to cancel listing', {
                       description: e.message
                     })
-                  } finally {
-                    setIsCancelling(false)
                   }
                 }}
-                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all border border-red-500/30"
               >
-                {isCancelling ? 'Processing...' : 'OK'}
+                OK
               </button>
             </div>
           </div>
