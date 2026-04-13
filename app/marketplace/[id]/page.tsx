@@ -541,9 +541,21 @@ export default function PropertyDetailPage({ params }: PageProps) {
           const wallet = (window as any).phantom?.solana
           const priceLamports = Math.floor(prc * 1e9)
           try {
-            await createSaleListing(wallet, property.id, amt, priceLamports)
+            const sig = await createSaleListing(wallet, property.id, amt, priceLamports)
             toast.success('Successfully listed for sale!', {
-              description: `${amt} tokens listed at ${prc} SOL each. View in Portfolio > Active Listings`
+              description: (
+                <div className="flex flex-col gap-2">
+                  <span>{amt} tokens listed at {prc} SOL each. View in Portfolio &gt; Active Listings</span>
+                  <a 
+                    href={`https://solscan.io/tx/${sig}?cluster=devnet`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    View on Explorer <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )
             })
           } catch (e: any) {
             toast.error('Failed to create listing', {

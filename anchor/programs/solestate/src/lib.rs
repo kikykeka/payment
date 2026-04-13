@@ -137,7 +137,7 @@ pub mod solestate {
 
         token::mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 MintTo {
                     mint: ctx.accounts.token_mint.to_account_info(),
                     to: ctx.accounts.investor_token_account.to_account_info(),
@@ -233,7 +233,7 @@ pub mod solestate {
 
         token::mint_to(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 MintTo {
                     mint: ctx.accounts.token_mint.to_account_info(),
                     to: ctx.accounts.buyer_token_account.to_account_info(),
@@ -329,7 +329,7 @@ pub mod solestate {
         // Lock tokens into listing escrow
         token::transfer(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.seller_token_account.to_account_info(),
                     to: ctx.accounts.listing_escrow.to_account_info(),
@@ -395,7 +395,7 @@ pub mod solestate {
 
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.listing_escrow.to_account_info(),
                     to: ctx.accounts.buyer_token_account.to_account_info(),
@@ -439,7 +439,7 @@ pub mod solestate {
 
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.listing_escrow.to_account_info(),
                     to: ctx.accounts.seller_token_account.to_account_info(),
@@ -484,7 +484,7 @@ pub mod solestate {
 
         create_metadata_accounts_v3(
             CpiContext::new_with_signer(
-                ctx.accounts.token_metadata_program.to_account_info(),
+                ctx.accounts.token_metadata_program.key(),
                 CreateMetadataAccountsV3 {
                     metadata: ctx.accounts.metadata_account.to_account_info(),
                     mint: ctx.accounts.token_mint.to_account_info(),
@@ -535,7 +535,7 @@ pub mod solestate {
 
         update_metadata_accounts_v2(
             CpiContext::new_with_signer(
-                ctx.accounts.token_metadata_program.to_account_info(),
+                ctx.accounts.token_metadata_program.key(),
                 UpdateMetadataAccountsV2 {
                     metadata: ctx.accounts.metadata_account.to_account_info(),
                     update_authority: ctx.accounts.property.to_account_info(),
@@ -592,7 +592,7 @@ pub mod solestate {
         // Transfer tokens from investor ATA → lockup vault PDA
         token::transfer(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.investor_token_account.to_account_info(),
                     to: ctx.accounts.lockup_vault.to_account_info(),
@@ -637,7 +637,7 @@ pub mod solestate {
         // Transfer tokens from vault → investor
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.lockup_vault.to_account_info(),
                     to: ctx.accounts.investor_token_account.to_account_info(),
@@ -676,7 +676,7 @@ pub mod solestate {
         // Transfer tokens from seller → escrow vault
         token::transfer(
             CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.seller_token_account.to_account_info(),
                     to: ctx.accounts.listing_vault.to_account_info(),
@@ -720,7 +720,7 @@ pub mod solestate {
         // Return tokens to seller
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.listing_vault.to_account_info(),
                     to: ctx.accounts.seller_token_account.to_account_info(),
@@ -734,7 +734,7 @@ pub mod solestate {
         // Close the vault account and return rent to the seller
         token::close_account(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 anchor_spl::token::CloseAccount {
                     account: ctx.accounts.listing_vault.to_account_info(),
                     destination: ctx.accounts.seller.to_account_info(),
@@ -812,7 +812,7 @@ pub mod solestate {
         // Transfer tokens: vault → buyer
         token::transfer(
             CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.token_program.key(),
                 Transfer {
                     from: ctx.accounts.listing_vault.to_account_info(),
                     to: ctx.accounts.buyer_token_account.to_account_info(),
@@ -821,6 +821,19 @@ pub mod solestate {
                 signer_seeds,
             ),
             amount * 1_000_000,
+        )?;
+
+        // Close the vault account and return rent to the seller
+        token::close_account(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                anchor_spl::token::CloseAccount {
+                    account: ctx.accounts.listing_vault.to_account_info(),
+                    destination: ctx.accounts.seller.to_account_info(),
+                    authority: ctx.accounts.sale_listing.to_account_info(),
+                },
+                signer_seeds,
+            )
         )?;
 
         msg!(
@@ -1464,7 +1477,7 @@ pub struct CreateSaleListing<'info> {
 
     /// Token escrow vault owned by the sale_listing PDA
     #[account(
-        init,
+        init_if_needed,
         payer = seller,
         token::mint = token_mint,
         token::authority = sale_listing,

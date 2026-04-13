@@ -456,9 +456,20 @@ export default function PortfolioPage() {
 
                                       try {
                                         const sig = await lockTokens(wallet, propertyId, tokens, duration)
-                                        console.log('Tokens locked:', sig)
                                         toast.success('Tokens locked successfully!', {
-                                          description: `${tokens} tokens locked for ${duration} days`
+                                          description: (
+                                            <div className="flex flex-col gap-2">
+                                              <span>{tokens} tokens locked for {duration} days</span>
+                                              <a 
+                                                href={`https://solscan.io/tx/${sig}?cluster=devnet`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-xs text-primary hover:underline flex items-center gap-1"
+                                              >
+                                                View on Explorer <ExternalLink className="w-3 h-3" />
+                                              </a>
+                                            </div>
+                                          )
                                         })
                                       } catch (e: any) {
                                         console.error(e)
@@ -684,9 +695,21 @@ export default function PortfolioPage() {
             const wallet = (window as any).phantom?.solana
             const priceLamports = Math.floor(prc * 1e9)
             try {
-              await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
+              const sig = await createSaleListing(wallet, sellModalData.property.id, amt, priceLamports)
               toast.success('Successfully listed for sale!', {
-                description: `${amt} tokens listed at ${prc} SOL each. Check Active Listings below.`
+                description: (
+                  <div className="flex flex-col gap-2">
+                    <span>{amt} tokens listed at {prc} SOL each. Check Active Listings below.</span>
+                    <a 
+                      href={`https://solscan.io/tx/${sig}?cluster=devnet`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      View on Explorer <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )
               })
               setSellModalData(null)
               // Wait a bit for blockchain to process, then refresh
@@ -755,9 +778,21 @@ export default function PortfolioPage() {
                   const property = cancelConfirmModal.property
                   try {
                     if (property) {
-                      await cancelSaleListing(wallet, property.id)
+                      const sig = await cancelSaleListing(wallet, property.id)
                       toast.success('Listing cancelled!', {
-                        description: 'Your tokens have been returned to your wallet'
+                        description: (
+                          <div className="flex flex-col gap-2">
+                            <span>Your tokens have been returned to your wallet.</span>
+                            <a 
+                              href={`https://solscan.io/tx/${sig}?cluster=devnet`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              View on Explorer <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )
                       })
                       setCancelConfirmModal(null)
                       // Wait for blockchain to process, then refresh

@@ -2,9 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import { Connection, PublicKey, Transaction, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
-import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor'
+import { Program, AnchorProvider, BN, Idl } from '@anchor-lang/core'
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { PROGRAM_ID as PROGRAM_ID_STR, DEVNET_RPC, COMMITMENT } from './config'
+import { properties } from './properties'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ interface SolanaProvider {
   isSolflare?: boolean
   publicKey: PublicKey | { toString(): string } | null
   isConnected: boolean
-  connect(): Promise<{ publicKey: { toString(): string } }>
+  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>
   disconnect(): Promise<void>
   signAndSendTransaction(tx: Transaction | { serialize(): Uint8Array } | Uint8Array): Promise<{ signature: string }>
   request(args: { method: string; params?: unknown }): Promise<{ signature: string }>
@@ -70,6 +71,7 @@ export interface WalletContextState {
     pricePerToken: number
     annualYield: number
   }) => Promise<string>
+  getTokenBalance: (tokenMint: string) => Promise<number>
 }
 
 const WalletCtx = createContext<WalletContextState>({
@@ -82,6 +84,7 @@ const WalletCtx = createContext<WalletContextState>({
   connect: async () => {},
   disconnect: () => {},
   sendPurchaseTx: async () => { throw new Error('Wallet not connected') },
+  getTokenBalance: async () => 0,
 })
 
 export function useWallet() { return useContext(WalletCtx) }
@@ -158,9 +161,9 @@ export const IDL = {
         { name: "tokenProgram" },
         { name: "systemProgram" },
         { name: "rent" },
-        { name: "cooldown", writable: true }
+        { name: "cooldown" }
       ],
-      args: [{ name: "tokenAmount", type: "u64" }, { name: "pricePerTokenLamports", type: "u64" }]
+      args: [{ name: "tokenAmount", type: "u64" }, { name: "price", type: "u64" }]
     },
     {
       name: "cancelSaleListing",
@@ -215,7 +218,7 @@ export const IDL = {
         { name: "rent" }
       ],
       args: [
-        { name: "propertyId", type: "string" },
+        { name: "_id", type: "string" },
         { name: "tokenAmount", type: "u64" },
         { name: "timestamp", type: "i64" }
       ]
@@ -303,6 +306,9 @@ export const IDL = {
     },
     {
       name: "PurchaseRecord",
+      // IMPORTANT: The field order MUST exactly match the smart contract struct in lib.rs
+      // otherwise Anchor will read bytes from the wrong offsets (mismatched memory layout).
+      discriminator: [239, 38, 40, 199, 4, 96, 209, 2],
       type: {
         kind: "struct",
         fields: [
@@ -354,24 +360,44 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Map on-chain records to frontend PurchaseRecord interface
+      const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], PROGRAM_ID)
+      
       const mappedPurchases: PurchaseRecord[] = records.map((r: any) => {
         const acc = r.account as any
-        const property = (require('./properties') as any).properties.find((p: any) => p.id === acc.propertyId)
+        
+        // Find property by calculating PDA for each known property
+        const property = properties.find((p) => {
+          const [pda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("property"), registryPda.toBuffer(), Buffer.from(p.id)],
+            PROGRAM_ID
+          )
+          return pda.equals(acc.property)
+        })
+        
+        // Skip if property not found (avoids showing garbage or legacy records)
+        if (!property) return null;
+
+        // BigInt/BN safety: toNumber() throws if > 2^53.
+        const tokenAmountRaw = acc.tokenAmount || acc.token_amount
+        const tokens = tokenAmountRaw ? Number(tokenAmountRaw.toString()) : 0
+
+        const timestampRaw = acc.timestamp
+        const timestampMs = timestampRaw ? Number(timestampRaw.toString()) * 1000 : Date.now()
         
         return {
           id: r.publicKey.toBase58(),
-          propertyId: acc.propertyId,
-          propertyName: property?.name || 'Unknown Property',
-          propertyLocation: property?.location || 'Unknown Location',
-          propertyImage: property?.image || '',
-          tokens: acc.tokenAmount.toNumber(),
-          pricePerToken: acc.pricePerToken.toNumber() / 1e9,
-          totalSol: acc.totalPrice.toNumber() / 1e9,
-          signature: r.publicKey.toBase58(), // Using PDA as ID since we don't store sig on-chain
-          timestamp: acc.timestamp.toNumber() * 1000,
-          annualYield: acc.annualYield / 100,
+          propertyId: property.id,
+          propertyName: property.name,
+          propertyLocation: property.location,
+          propertyImage: property.image,
+          tokens: tokens, // Humman-readable units (e.g. 1, 5, 10)
+          pricePerToken: property.pricePerToken,
+          totalSol: tokens * property.pricePerToken,
+          signature: r.publicKey.toBase58(),
+          timestamp: timestampMs,
+          annualYield: property.annualYield,
         }
-      })
+      }).filter((p: PurchaseRecord | null): p is PurchaseRecord => p !== null)
       
       // Sort by timestamp descending
       mappedPurchases.sort((a, b) => b.timestamp - a.timestamp)
@@ -409,7 +435,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (wasConnected) {
         try {
           // Silently reconnect without showing approval popup
-          await p.connect({ onlyIfTrusted: true } as any)
+          await p.connect({ onlyIfTrusted: true })
         } catch (err) {
           // If silent connect fails, clear the flag
           console.log('[v0] Silent reconnect failed:', err)
@@ -573,14 +599,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return signature
   }, [refreshBalance])
 
+  const getTokenBalance = useCallback(async (mintStr: string) => {
+    if (!publicKey) return 0
+    try {
+      const mintPk = new PublicKey(mintStr)
+      const userPk = new PublicKey(publicKey)
+      const ata = getAssociatedTokenAddressSync(mintPk, userPk, false, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)
+      
+      const info = await connection.getAccountInfo(ata)
+      if (!info || info.data.length < 72) return 0
+      
+      // SPL tokens use base units. In this dapp, property tokens have 6 decimals.
+      // We divide by 1,000,000 to get the human-readable amount.
+      const amount = info.data.readBigUInt64LE(64)
+      return Number(amount.toString()) / 1_000_000
+    } catch (err) {
+      console.error('[SolEstate] Failed to fetch token balance:', err)
+      return 0
+    }
+  }, [publicKey])
+
   const shortAddress = useMemo(() =>
     publicKey ? `${publicKey.slice(0, 4)}...${publicKey.slice(-4)}` : null,
     [publicKey]
   )
 
   const value = useMemo<WalletContextState>(
-    () => ({ connected, connecting, publicKey, balance, shortAddress, purchases, connect, disconnect, sendPurchaseTx }),
-    [connected, connecting, publicKey, balance, shortAddress, purchases, connect, disconnect, sendPurchaseTx]
+    () => ({ connected, connecting, publicKey, balance, shortAddress, purchases, connect, disconnect, sendPurchaseTx, getTokenBalance }),
+    [connected, connecting, publicKey, balance, shortAddress, purchases, connect, disconnect, sendPurchaseTx, getTokenBalance]
   )
 
   return <WalletCtx.Provider value={value}>{children}</WalletCtx.Provider>

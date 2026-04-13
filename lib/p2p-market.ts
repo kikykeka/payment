@@ -1,5 +1,5 @@
 import { Connection, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js'
-import { Program, AnchorProvider, BN } from '@coral-xyz/anchor'
+import { Program, AnchorProvider, BN } from '@anchor-lang/core'
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { IDL } from './wallet-context'
 import { PROGRAM_ID as PROGRAM_ID_STR, DEVNET_RPC, COMMITMENT } from './config'

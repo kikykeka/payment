@@ -1,4 +1,4 @@
-const anchor = require("@coral-xyz/anchor");
+const anchor = require("@anchor-lang/core");
 const { Transaction, TransactionInstruction, PublicKey, Keypair, SystemProgram } = require("@solana/web3.js");
 const SYSVAR_RENT_PUBKEY = new PublicKey("SysvarRent111111111111111111111111111111111");
 const fs = require('fs');
